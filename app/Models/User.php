@@ -33,4 +33,10 @@ class User extends Authenticatable {
         'email_verified_at' => 'datetime',
         'verified' => 'boolean',
     ];
+
+ public function bookings()
+{
+    return $this->hasMany(Booking::class);
+}
+
 }
