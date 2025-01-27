@@ -15,50 +15,46 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => 'required|string',
             'email' => 'required|email|unique:users',
-            'password' => 'required|min:5'
+            'password' => 'required|min:6',
+            'phone' => 'required|string',
+            'codigo_postal' => 'required|string',
+            'profile_image' => 'nullable|image|max:10240',   
         ]);
-
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password'])
-        ]);
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
+    
+        // Manejar imagen
+        if ($request->hasFile('profile_image')) {
+            $path = $request->file('profile_image')->store('profiles', 'public');
+            $validated['profile_image'] = $path;
+            
+            // Debug
+            \Log::info('Image uploaded:', ['path' => $path]);
+        }
+    
+        $validated['password'] = Hash::make($validated['password']);
+        $user = User::create($validated);
+    
         return response()->json([
             'user' => $user,
-            'token' => $token
+            'token' => $user->createToken('auth_token')->plainTextToken
         ]);
     }
-
-    public function login(Request $request)
-{
+    
+   public function login(Request $request) {
     $validated = $request->validate([
         'email' => 'required|email',
-        'password' => 'nullable' // Permite que el campo sea vacío, ya que algunos usuarios no usan contraseña
+        'password' => 'required'
     ]);
-    
+
     $user = User::where('email', $validated['email'])->first();
-    
-    if (!$user) {
-        return response()->json(['message' => 'Usuario no encontrado'], 404);
-    }
-    
-    // Si el usuario no tiene contraseña (caso de login con Google), no valida la contraseña
-    if ($user->google_id && !$validated['password']) {
-        // El usuario se registró con Google, así que no se valida la contraseña
-        $token = $user->createToken('auth_token')->plainTextToken;
-        return response()->json(['token' => $token, 'user' => $user]);
-    }
 
     if (!$user || !Hash::check($validated['password'], $user->password)) {
-        return response()->json(['message' => 'Credenciales inválidas'], 401);
+        return response()->json(['message' => 'Invalid credentials'], 401);
     }
-    
-    $token = $user->createToken('auth_token')->plainTextToken;
-    
-    return response()->json(['token' => $token, 'user' => $user]);
+ 
+    return response()->json([
+        'user' => $user,
+        'token' => $user->createToken('auth_token')->plainTextToken
+    ]);
 }
 
     public function profile(Request $request)
@@ -103,7 +99,21 @@ public function loginWithGoogle(Request $request)
     }
 }
 
+ public function checkPhone(Request $request)
+{
+   $request->validate(['phone' => 'required']);
+   $exists = User::where('phone', $request->phone)->exists();
+   return response()->json(['exists' => $exists]); 
+}
 
+
+public function checkEmail(Request $request)
+{
+    $request->validate(['email' => 'required|email']);
+    
+    $exists = User::where('email', $request->email)->exists();
+    return response()->json(['exists' => $exists]);
+}
 
 public function handleGoogleCallback()
 {

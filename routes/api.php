@@ -16,8 +16,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/fields/{field}', [FieldController::class, 'show']);
     Route::get('/fields/{field}/availability', [FieldController::class, 'checkAvailability']);
     Route::post('/bookings', [BookingController::class, 'store']);
+   
+ 
+    Route::get('/bookings', [BookingController::class, 'index']);
+    Route::post('/bookings', [BookingController::class, 'store']);
+    Route::put('/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
+    Route::get('/active-reservations', [BookingController::class, 'getActiveReservations']);
+    Route::get('/reservation-history', [BookingController::class, 'getReservationHistory']);
+
 
 });
+Route::post('/check-email', [AuthController::class, 'checkEmail']);
+Route::post('/check-phone', [AuthController::class, 'checkPhone']);
+
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
 Route::post('login/google', [AuthController::class, 'loginWithGoogle']);
