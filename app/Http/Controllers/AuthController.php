@@ -18,18 +18,20 @@ class AuthController extends Controller
             'password' => 'required|min:6',
             'phone' => 'required|string',
             'codigo_postal' => 'required|string',
-            'profile_image' => 'nullable|image|max:10240',   
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', 
         ]);
     
         // Manejar imagen
         if ($request->hasFile('profile_image')) {
-            $path = $request->file('profile_image')->store('profiles', 'public');
-            $validated['profile_image'] = $path;
-            
-            // Debug
-            \Log::info('Image uploaded:', ['path' => $path]);
+            try {
+                $path = $request->file('profile_image')->store('profiles', 'public');
+                $validated['profile_image'] = $path;
+                \Log::info('Image uploaded:', ['path' => $path]);
+            } catch (\Exception $e) {
+                \Log::error('Error uploading image:', ['error' => $e->getMessage()]);
+                return response()->json(['message' => 'Error uploading image'], 500);
+            }
         }
-    
         $validated['password'] = Hash::make($validated['password']);
         $user = User::create($validated);
     

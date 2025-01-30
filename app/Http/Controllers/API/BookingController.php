@@ -19,48 +19,85 @@ class BookingController extends Controller
         return response()->json($bookings);
     }
 
-    public function store(Request $request) 
-    {
-        $validated = $request->validate([
-            'field_id' => 'required|exists:fields,id',
-            'date' => 'required|date|after:today',
-            'start_time' => 'required|date_format:H:i',
-            'players_needed' => 'nullable|integer',
-            'allow_joining' => 'boolean'
-        ]);
+   
+public function store(Request $request) 
+{
+    $validated = $request->validate([
+        'field_id' => 'required|exists:fields,id',
+        'date' => 'required|date|after_or_equal:today',  
+        'start_time' => 'required|date_format:H:i',
+        'players_needed' => 'nullable|integer',
+        'allow_joining' => 'boolean'
+    ]);
 
-        $field = Field::findOrFail($validated['field_id']);
-        $startTime = Carbon::parse($validated['date'] . ' ' . $validated['start_time']);
-        $endTime = $startTime->copy()->addMinutes($field->duration_per_match ?? 60);
+    $field = Field::findOrFail($validated['field_id']);
+    $startTime = Carbon::parse($validated['date'] . ' ' . $validated['start_time']);
+    $endTime = $startTime->copy()->addMinutes(60);  
 
-        if (!$this->checkAvailability($field->id, $startTime, $endTime)) {
-            return response()->json(['message' => 'Horario no disponible'], 422);
+    if (!$this->checkAvailability($field->id, $startTime, $endTime)) {
+        return response()->json(['message' => 'Horario no disponible'], 422);
+    }
+
+    $booking = Booking::create([
+        'user_id' => auth()->id(),
+        'field_id' => $field->id,
+        'start_time' => $startTime,
+        'end_time' => $endTime,
+        'total_price' => $field->price_per_match,
+        'status' => 'pending',
+        'players_needed' => $validated['players_needed'],
+        'allow_joining' => $validated['allow_joining'] ?? false
+    ]);
+
+    return response()->json($booking->load('field'), 201);
+}
+
+
+public function getAvailableHours(Field $field, Request $request)
+{
+    $date = Carbon::parse($request->date);
+    $dayOfWeek = strtolower($date->format('l'));  // Obtiene el día de la semana en minúsculas
+    
+    \Log::info('Requesting available hours', [
+        'field_id' => $field->id,
+        'date' => $request->date,
+        'day_of_week' => $dayOfWeek
+    ]);
+
+    $availableHours = [];
+    $storedHours = $field->available_hours;
+    
+    // Obtenemos solo los horarios del día solicitado
+    if (isset($storedHours[$dayOfWeek])) {
+        foreach ($storedHours[$dayOfWeek] as $hour) {
+            $startTime = Carbon::parse($date->format('Y-m-d') . ' ' . $hour);
+            $endTime = $startTime->copy()->addMinutes(60);
+            
+            // Filtra las horas pasadas para el día actual
+            if ($date->isToday() && $startTime->isPast()) {
+                continue;
+            }
+            
+            // Verifica si el horario está disponible
+            if ($this->checkAvailability($field->id, $startTime, $endTime)) {
+                $availableHours[] = $hour;
+            }
         }
-
-        $booking = Booking::create([
-            'user_id' => auth()->id(),
-            'field_id' => $field->id,
-            'start_time' => $startTime,
-            'end_time' => $endTime,
-            'total_price' => $field->price_per_match,
-            'status' => 'pending',
-            'players_needed' => $validated['players_needed'],
-            'allow_joining' => $validated['allow_joining'] ?? false
-        ]);
-
-        return response()->json($booking->load('field'), 201);
     }
+    
+    // Retornamos solo el array de horas disponibles
+    return response()->json($availableHours);
+}
 
-    private function checkAvailability($fieldId, $startTime, $endTime) 
-    {
-        return !Booking::where('field_id', $fieldId)
-            ->where('status', '!=', 'cancelled')
-            ->where(function($query) use ($startTime, $endTime) {
-                $query->whereBetween('start_time', [$startTime, $endTime])
-                    ->orWhereBetween('end_time', [$startTime, $endTime]);
-            })->exists();
-    }
-
+private function checkAvailability($fieldId, $startTime, $endTime) 
+{
+    return !Booking::where('field_id', $fieldId)
+        ->where('status', '!=', 'cancelled')
+        ->where(function($query) use ($startTime, $endTime) {
+            $query->whereBetween('start_time', [$startTime, $endTime])
+                ->orWhereBetween('end_time', [$startTime, $endTime]);
+        })->exists();
+}
     public function cancel(Booking $booking) 
     {
         if ($booking->user_id !== auth()->id()) {

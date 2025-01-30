@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Field;
+use App\Models\Booking;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
 
 class FieldController extends Controller
 {
