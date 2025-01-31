@@ -52,42 +52,55 @@ public function store(Request $request)
     return response()->json($booking->load('field'), 201);
 }
 
-
 public function getAvailableHours(Field $field, Request $request)
 {
+    // Validar la fecha
+    $request->validate([
+        'date' => 'required|date_format:Y-m-d',
+    ]);
+
     $date = Carbon::parse($request->date);
     $dayOfWeek = strtolower($date->format('l'));  // Obtiene el día de la semana en minúsculas
-    
+
     \Log::info('Requesting available hours', [
         'field_id' => $field->id,
         'date' => $request->date,
         'day_of_week' => $dayOfWeek
     ]);
 
+    // Verificar si la fecha es pasada (excepto hoy)
+    if ($date->isPast() && !$date->isToday()) {
+        return response()->json([]); // Devuelve un array vacío
+    }
+
     $availableHours = [];
     $storedHours = $field->available_hours;
-    
-    // Obtenemos solo los horarios del día solicitado
+
+    // Verificar si hay horarios almacenados para el día solicitado
     if (isset($storedHours[$dayOfWeek])) {
         foreach ($storedHours[$dayOfWeek] as $hour) {
             $startTime = Carbon::parse($date->format('Y-m-d') . ' ' . $hour);
             $endTime = $startTime->copy()->addMinutes(60);
-            
-            // Filtra las horas pasadas para el día actual
+
+            // Filtrar horas pasadas para el día actual
             if ($date->isToday() && $startTime->isPast()) {
                 continue;
             }
-            
-            // Verifica si el horario está disponible
+
+            // Verificar si el horario está disponible
             if ($this->checkAvailability($field->id, $startTime, $endTime)) {
                 $availableHours[] = $hour;
             }
         }
     }
-    
-    // Retornamos solo el array de horas disponibles
-    return response()->json($availableHours);
+
+    \Log::info('Filtered available hours', [
+        'available_hours' => $availableHours,
+    ]);
+
+    return response()->json($availableHours); // Devuelve solo el array de horas
 }
+
 
 private function checkAvailability($fieldId, $startTime, $endTime) 
 {

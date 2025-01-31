@@ -50,13 +50,16 @@ Route::middleware(['auth:admin'])->group(function () {
     })->name('virtual-reality');
 
 
+    Route::resource('field', FieldController::class);
+
+
     Route::get('/user-management', [UserManagementController::class, 'index'])->name('user-management');
 Route::get('/user-management/{id}/edit', [UserManagementController::class, 'edit'])->name('user.edit');
 Route::put('/user-management/{id}', [UserManagementController::class, 'update'])->name('user.update');
 Route::delete('/user-management/{id}', [UserManagementController::class, 'destroy'])->name('user.destroy');
 
 
-// Primero las rutas específicas
+
 Route::get('/field-management', [FieldManagementController::class, 'index'])->name('field-management');
 Route::get('/field-management/create', [FieldManagementController::class, 'create'])->name('field.create');
 Route::post('/field-management', [FieldManagementController::class, 'store'])->name('field.store');

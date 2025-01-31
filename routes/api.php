@@ -9,6 +9,7 @@ use App\Http\Controllers\API\BookingController;
 
  
 
+
 Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAvailableHours'])
     ->middleware('auth:sanctum');
 

@@ -60,6 +60,7 @@
                             @enderror
                         </div>
                     </div>
+                    
                 </div>
 
                 <div class="row">
@@ -109,27 +110,18 @@
 
                 <div class="form-group">
                     <label>Horarios Disponibles</label>
-                    @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day)
-                        <div class="mb-3">
-                            <label class="text-capitalize">{{ $day }}</label>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <label>Hora inicio</label>
-                                    <input type="time" name="available_hours[{{ $day }}][start]" class="form-control @error('available_hours.' . $day . '.start') is-invalid @enderror">
-                                    @error('available_hours.' . $day . '.start')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                                <div class="col-md-6">
-                                    <label>Hora fin</label>
-                                    <input type="time" name="available_hours[{{ $day }}][end]" class="form-control @error('available_hours.' . $day . '.end') is-invalid @enderror">
-                                    @error('available_hours.' . $day . '.end')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
+                    <div class="mb-3">
+                        <div class="row">
+                            <div class="col-12">
+                                <p class="text-sm text-muted mb-2">Configura los horarios para cada día de la semana:</p>
                             </div>
                         </div>
-                    @endforeach
+
+                        <!-- Configuración por día -->
+                        <div id="days-config">
+                            <!-- Los días se generarán dinámicamente por JavaScript -->
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -146,18 +138,123 @@
                 </div>
 
                 <div class="d-flex justify-content-end mt-4">
-                    <button type="button" class="btn btn-light m-0">Cancelar</button>
+                    <a href="{{ route('field.index') }}" class="btn btn-light m-0">Cancelar</a>
                     <button type="submit" class="btn bg-gradient-primary m-0 ms-2">Crear Cancha</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-@endsection
 
-@push('js')
 <script>
-    // Aquí puedes agregar JavaScript para manejar la vista previa de imágenes
-    // y cualquier otra funcionalidad interactiva que necesites
+document.addEventListener('DOMContentLoaded', function () {
+    const daysConfig = {
+        monday: 'Lunes',
+        tuesday: 'Martes',
+        wednesday: 'Miércoles',
+        thursday: 'Jueves',
+        friday: 'Viernes',
+        saturday: 'Sábado',
+        sunday: 'Domingo'
+    };
+
+    // Inicializar todos los días
+    Object.keys(daysConfig).forEach(day => {
+        const container = document.getElementById('days-config');
+        container.innerHTML += createDayConfig(day, daysConfig[day]);
+    });
+
+    // Event listeners para los checkboxes y campos de tiempo
+    document.querySelectorAll('.day-enable').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const day = this.dataset.day;
+            const timeInputs = document.getElementById(`${day}_times`);
+            timeInputs.style.display = this.checked ? 'flex' : 'none';
+            updateAvailableHours();
+        });
+    });
+
+    document.querySelectorAll('.time-start, .time-end').forEach(input => {
+        input.addEventListener('change', updateAvailableHours);
+    });
+
+    // Función para crear la configuración de cada día
+    function createDayConfig(day, dayName) {
+        return `
+            <div class="day-config border rounded p-3 mb-3">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <input class="form-check-input day-enable" type="checkbox" 
+                                   id="enable_${day}" data-day="${day}">
+                            <label class="form-check-label" for="enable_${day}">
+                                <strong>${dayName}</strong>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="row time-inputs" id="${day}_times" style="display: none;">
+                            <div class="col-md-5">
+                                <label class="form-label">Hora inicio</label>
+                                <input type="time" class="form-control time-start" 
+                                       data-day="${day}" value="10:00">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">Hora fin</label>
+                                <input type="time" class="form-control time-end" 
+                                       data-day="${day}" value="22:00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Función para generar los intervalos de tiempo
+    function generateTimeSlots(start, end) {
+        const slots = [];
+        let current = new Date(`2000-01-01T${start}`);
+        const endTime = new Date(`2000-01-01T${end}`);
+        
+        while (current <= endTime) {
+            slots.push(current.toTimeString().slice(0, 5));
+            current.setHours(current.getHours() + 1);
+        }
+        
+        return slots;
+    }
+
+    // Función para actualizar los horarios disponibles
+    function updateAvailableHours() {
+        const availableHours = {};
+        
+        document.querySelectorAll('.day-enable:checked').forEach(checkbox => {
+            const day = checkbox.dataset.day;
+            const startTime = document.querySelector(`.time-start[data-day="${day}"]`).value;
+            const endTime = document.querySelector(`.time-end[data-day="${day}"]`).value;
+            
+            if (startTime && endTime) {
+                availableHours[day] = generateTimeSlots(startTime, endTime);
+            }
+        });
+
+        // Actualizar el campo oculto
+        let hiddenInput = document.getElementById('available_hours_input');
+        if (!hiddenInput) {
+            hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'available_hours';
+            hiddenInput.id = 'available_hours_input';
+            document.querySelector('form').appendChild(hiddenInput);
+        }
+        hiddenInput.value = JSON.stringify(availableHours);
+
+        console.log('Horarios actualizados:', availableHours);
+    }
+
+    // Inicializar los horarios al cargar la página
+    updateAvailableHours();
+});
 </script>
-@endpush
+@endsection

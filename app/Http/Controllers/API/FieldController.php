@@ -20,6 +20,54 @@ class FieldController extends Controller
     }
 
    
+
+    public function getAvailableHours(Field $field, Request $request)
+{
+    // Validar la fecha
+    $request->validate([
+        'date' => 'required|date',
+    ]);
+
+    $date = $request->date;
+    
+    // Obtener el día de la semana (1 = lunes, 7 = domingo)
+    $dayOfWeek = strtolower(Carbon::parse($date)->format('l'));
+    
+    // Obtener los horarios disponibles para ese día desde el campo
+    $availableHours = json_decode($field->available_hours, true);
+    $hoursForDay = $availableHours[$dayOfWeek] ?? [];
+
+    // Obtener las reservas existentes para ese día
+    $bookings = Booking::where('field_id', $field->id)
+        ->whereDate('start_time', $date)
+        ->where('status', '!=', 'cancelled')
+        ->get(['start_time', 'end_time']);
+
+    // Filtrar las horas que ya están reservadas
+    $availableHours = array_filter($hoursForDay, function($hour) use ($bookings, $date) {
+        $startTime = Carbon::parse($date . ' ' . $hour);
+        
+        foreach ($bookings as $booking) {
+            $bookingStart = Carbon::parse($booking->start_time);
+            $bookingEnd = Carbon::parse($booking->end_time);
+            
+            if ($startTime->between($bookingStart, $bookingEnd)) {
+                return false;
+            }
+        }
+        
+        // Si es el día actual, filtrar las horas que ya pasaron
+        if (Carbon::parse($date)->isToday()) {
+            return $startTime->isFuture();
+        }
+        
+        return true;
+    });
+
+    return response()->json(array_values($availableHours));
+}
+
+
     // BookingController.php
 public function store(Request $request)
 {

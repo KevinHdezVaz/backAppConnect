@@ -2,26 +2,31 @@
 
 namespace App\Models;
 
-use App\Models\Booking;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-// app/Models/Field.php
-class Field extends Model {
+class Field extends Model
+{
     protected $fillable = [
-        'name', 'description', 'location',
-        'available_hours', 'amenities', 'images', 'price_per_match',
-        'duration_per_match', 'latitude', 'longitude', 'is_active', 'type'
+        'name',
+        'description',
+        'location',
+        'latitude',
+        'longitude',
+        'is_active',
+        'type',
+        'available_hours',
+        'amenities',
+        'images',
+        'price_per_match',
     ];
 
     protected $casts = [
         'available_hours' => 'array',
         'amenities' => 'array',
         'images' => 'array',
-        'is_active' => 'boolean'
+        'is_active' => 'boolean',
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
+        'price_per_match' => 'decimal:4'
     ];
-
-    public function bookings() {
-        return $this->hasMany(Booking::class);
-    }
 }
