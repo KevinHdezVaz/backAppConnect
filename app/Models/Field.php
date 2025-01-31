@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 // app/Models/Field.php
 class Field extends Model {
     protected $fillable = [
-        'name', 'description', 'location', 'price_per_hour',
+        'name', 'description', 'location',
         'available_hours', 'amenities', 'images', 'price_per_match',
         'duration_per_match', 'latitude', 'longitude', 'is_active', 'type'
     ];
