@@ -48,12 +48,12 @@
                                     <td>
                                         <span class="badge badge-sm {{ $field->is_active ? 'bg-gradient-success' : 'bg-gradient-secondary' }}">
                                             {{ $field->is_active ? 'Activa' : 'Inactiva' }}
-                                        </span>
+                                        </span> 
                                     </td>
                                     <td class="text-center">
-                                        <a href="{{ route('field.edit', $field->id) }}" class="mx-1">
-                                            <i class="fas fa-edit text-secondary"></i>
-                                        </a>
+                                    <a href="{{ route('field.edit', $field->id) }}" class="mx-1">
+    <i class="fas fa-edit text-secondary"></i>
+</a>
                                         <form action="{{ route('field.destroy', $field->id) }}" method="POST" style="display: inline;">
                                             @csrf
                                             @method('DELETE')
