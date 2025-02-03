@@ -9,10 +9,10 @@ class Field extends Model
     protected $fillable = [
         'name',
         'description',
-        'location',
         'latitude',
         'longitude',
         'is_active',
+        'municipio',
         'type',
         'available_hours',
         'amenities',

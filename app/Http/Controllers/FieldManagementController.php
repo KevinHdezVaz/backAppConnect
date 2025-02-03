@@ -51,10 +51,10 @@ class FieldManagementController extends Controller
         $validated = $request->validate([
             'name' => 'required|string',
             'description' => 'required|string',
-            'location' => 'required|string',
             'price_per_match' => 'required|numeric',
             'type' => 'required|in:futbol5,futbol7,futbol11',
             'latitude' => 'nullable|numeric',
+            'municipio' => 'required|string',
             'longitude' => 'nullable|numeric',
             'is_active' => 'sometimes',
             'amenities' => 'nullable|array',
@@ -72,8 +72,8 @@ class FieldManagementController extends Controller
         $validatedData = [
             'name' => $validated['name'],
             'description' => $validated['description'],
-            'location' => $validated['location'],
-            'price_per_match' => $validated['price_per_match'],
+            'price_per_match' => $validated['price_per_match'],      
+            'municipio' => $validated['municipio'],
             'duration_per_match' => 60,
             'type' => $validated['type'],
             'latitude' => $validated['latitude'] ?? null,
@@ -108,58 +108,70 @@ class FieldManagementController extends Controller
     }
 }
 
-    public function update(Request $request, $id)
-    {
+
+public function update(Request $request, $id)
+{
+    try {
+        \Log::info('Actualizando cancha', $request->all());
         $field = Field::findOrFail($id);
 
-        // Validar los datos
-        $validated = $request->validate([
-            'name' => 'required|string',
-            'description' => 'required|string',
-            'location' => 'required|string',
-            'price_per_match' => 'required|numeric',
+        // Validación
+        $request->validate([
+            'name' => 'required|string|max:255',
             'type' => 'required|in:futbol5,futbol7,futbol11',
+            'description' => 'required|string',
+            'municipio' => 'required|string',
+            'price_per_match' => 'required|numeric',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
-            'is_active' => 'boolean',
+            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'amenities' => 'nullable|array',
-            'available_hours' => 'required|array',
-            'available_hours.*.start' => 'nullable|string',
-            'available_hours.*.end' => 'nullable|string',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048'
+            'available_hours' => 'required|string', // Cambiado de 'json' a 'string'
         ]);
 
-        // Procesar available_hours
-        $availableHours = [];
-        foreach ($request->available_hours as $day => $hours) {
-            $filteredHours = array_filter([$hours['start'], $hours['end']], function ($hour) {
-                return !is_null($hour);
-            });
-
-            if (!empty($filteredHours)) {
-                $availableHours[$day] = $filteredHours;
-            }
-        }
-        $validated['available_hours'] = json_encode($availableHours, JSON_UNESCAPED_UNICODE);
-
-        // Procesar amenities
-        $validated['amenities'] = $request->amenities ?? [];
-
-        // Procesar imágenes
-        if ($request->hasFile('images')) {
-            $images = [];
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('fields', 'public');
-                $images[] = Storage::url($path);
-            }
-            $validated['images'] = $images;
+        // Decodificar y validar available_hours
+        $availableHours = json_decode($request->available_hours, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception('Error en el formato de available_hours');
         }
 
-        // Actualizar
-        $field->update($validated);
+       // Manejar imágenes
+       $newImageArray = $request->existing_images ?? [];
+        
+       if ($request->hasFile('images')) {
+           foreach ($request->file('images') as $image) {
+               $path = $image->store('fields', 'public');
+               $newImageArray[] = Storage::url($path);
+           }
+       }
 
-        return redirect()->route('field-management')->with('success', 'Cancha actualizada exitosamente');
+ 
+        $field->images = json_encode($newImageArray);
+
+        // Actualizar los datos básicos
+        $field->name = $request->name;
+        $field->type = $request->type;
+        $field->municipio = $request->municipio;
+        $field->description = $request->description;
+        $field->price_per_match = $request->price_per_match;
+        $field->latitude = $request->latitude;
+        $field->longitude = $request->longitude;
+        $field->amenities = json_encode($request->amenities ?? []);
+        $field->available_hours = json_encode($availableHours); // Guardar como JSON
+        $field->is_active = $request->has('is_active');
+
+        $field->save();
+
+        return redirect()->route('field-management')
+            ->with('success', 'Cancha actualizada exitosamente');
+    } catch (\Exception $e) {
+        \Log::error('Error actualizando cancha: ' . $e->getMessage());
+        \Log::error('Available hours recibido: ' . $request->available_hours);
+        return redirect()->back()
+            ->withInput()
+            ->with('error', 'Error al actualizar la cancha: ' . $e->getMessage());
     }
+}
 
     public function destroy($id)
     {

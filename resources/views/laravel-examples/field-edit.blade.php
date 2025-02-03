@@ -1,5 +1,18 @@
 @extends('layouts.user_type.auth')
 @section('content')
+@if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
+@if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
 
 <div class="container-fluid py-4">
     <div class="card">
@@ -7,7 +20,7 @@
             <h6 class="mb-0">Editar Cancha</h6>
         </div>
         <div class="card-body pt-4 p-3">
-            <form action="{{ route('field.update', $field->id) }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ route('field-management.update', $field->id) }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 @method('PUT')
                 
@@ -49,10 +62,10 @@
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="location">Ubicación</label>
-                            <input type="text" name="location" class="form-control @error('location') is-invalid @enderror" 
-                                   value="{{ old('location', $field->location) }}" required>
-                            @error('location')
+                            <label for="municipio">Municipio</label>
+                            <input type="text" name="municipio" class="form-control @error('municipio') is-invalid @enderror" 
+                                   value="{{ old('municipio', $field->municipio) }}" required>
+                            @error('municipio')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
@@ -135,15 +148,26 @@
                     <label for="images">Imágenes Actuales</label>
                     <div class="row mb-3">
                         @if($field->images)
-                            @foreach(json_decode($field->images) as $image)
-                                <div class="col-md-3 mb-2">
-                                    <img src="{{ $image }}" class="img-thumbnail" style="height: 150px; object-fit: cover;">
+                            @foreach(json_decode($field->images) as $index => $image)
+                                <div class="col-md-3 mb-2" id="image-container-{{ $index }}">
+                                    <div class="position-relative">
+                                        <img src="{{ $image }}" class="img-thumbnail" style="height: 150px; width: 100%; object-fit: cover;">
+                                        <button type="button" 
+                                                class="btn btn-danger btn-sm position-absolute"
+                                                style="top: 5px; right: 5px; padding: 3px 8px; z-index: 10;"
+                                                onclick="removeImage({{ $index }})">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        <input type="hidden" name="existing_images[]" value="{{ $image }}">
+                                    </div>
                                 </div>
                             @endforeach
                         @endif
                     </div>
+                    
                     <label for="images">Agregar Nuevas Imágenes</label>
                     <input type="file" name="images[]" class="form-control @error('images') is-invalid @enderror" multiple accept="image/*">
+                    <div id="image-preview-container" class="row mt-3"></div>
                     @error('images')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
@@ -164,7 +188,79 @@
 </div>
 
 <script>
+// Funciones para manejo de imágenes
+function removeImage(index) {
+    const container = document.getElementById(`image-container-${index}`);
+    if (container) {
+        container.remove();
+        updateExistingImages();
+    }
+}
+
+function updateExistingImages() {
+    const currentImages = Array.from(document.querySelectorAll('input[name="existing_images[]"]'))
+        .map(input => input.value);
+    
+    let removedImages = document.getElementById('removed_images');
+    if (!removedImages) {
+        removedImages = document.createElement('input');
+        removedImages.type = 'hidden';
+        removedImages.name = 'removed_images';
+        removedImages.id = 'removed_images';
+        document.querySelector('form').appendChild(removedImages);
+    }
+    removedImages.value = JSON.stringify(currentImages);
+}
+
+function previewImages(input) {
+    const previewContainer = document.getElementById('image-preview-container');
+    if (!previewContainer) {
+        const container = document.createElement('div');
+        container.id = 'image-preview-container';
+        container.className = 'row mt-3';
+        input.parentElement.appendChild(container);
+    }
+
+    const files = input.files;
+    const container = document.getElementById('image-preview-container');
+    container.innerHTML = ''; // Limpiar previsualizaciones anteriores
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const previewDiv = document.createElement('div');
+                previewDiv.className = 'col-md-3 mb-2';
+                previewDiv.innerHTML = `
+                    <div class="position-relative">
+                        <img src="${e.target.result}" class="img-thumbnail" style="height: 150px; width: 100%; object-fit: cover;">
+                        <button type="button" 
+                                class="btn btn-danger btn-sm position-absolute"
+                                style="top: 5px; right: 5px; padding: 3px 8px;"
+                                onclick="removePreview(this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(previewDiv);
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+}
+
+function removePreview(button) {
+    button.closest('.col-md-3').remove();
+}
+
+// Código principal
 document.addEventListener('DOMContentLoaded', function () {
+    // Event listener para vista previa de imágenes
+    document.querySelector('input[name="images[]"]').addEventListener('change', function() {
+        previewImages(this);
+    });
+
     const daysConfig = {
         monday: 'Lunes',
         tuesday: 'Martes',
@@ -177,13 +273,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const existingHours = @json($field->available_hours);
 
-    // Inicializar todos los días
     Object.keys(daysConfig).forEach(day => {
         const container = document.getElementById('days-config');
         container.innerHTML += createDayConfig(day, daysConfig[day], existingHours[day] || []);
     });
 
-    // Marcar los días que tienen horarios y mostrar sus campos
     Object.keys(existingHours).forEach(day => {
         const checkbox = document.querySelector(`#enable_${day}`);
         if (checkbox && existingHours[day].length > 0) {
@@ -192,7 +286,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Event listeners
     document.querySelectorAll('.day-enable').forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             const day = this.dataset.day;

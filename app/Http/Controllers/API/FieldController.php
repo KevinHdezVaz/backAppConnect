@@ -19,6 +19,7 @@ class FieldController extends Controller
         return $field;
     }
 
+    
    
 
     public function getAvailableHours(Field $field, Request $request)

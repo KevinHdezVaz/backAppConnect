@@ -9,7 +9,7 @@
                         <div>
                             <h5 class="mb-0">Todas las Canchas</h5>
                         </div>
-                        <a href="{{ route('field.create') }}" class="btn bg-gradient-primary btn-sm mb-0" type="button">+ NUEVA CANCHA</a>
+                        <a href="{{ route('field-management.create') }}" class="btn bg-gradient-primary btn-sm mb-0" type="button">+ NUEVA CANCHA</a>
                     </div>
                 
                     </div>
@@ -21,7 +21,7 @@
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">ID</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">NOMBRE</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">TIPO</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">UBICACIÓN</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">MUNICIPIO</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">PRECIO/HORA</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">ESTADO</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">ACCIONES</th>
@@ -51,10 +51,10 @@
                                         </span> 
                                     </td>
                                     <td class="text-center">
-                                    <a href="{{ route('field.edit', $field->id) }}" class="mx-1">
+                                    <a href="{{ route('field-management.edit', $field->id) }}" class="mx-1">
     <i class="fas fa-edit text-secondary"></i>
 </a>
-                                        <form action="{{ route('field.destroy', $field->id) }}" method="POST" style="display: inline;">
+                                        <form action="{{ route('field-management.destroy', $field->id) }}" method="POST" style="display: inline;">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-link p-0 mx-1" 

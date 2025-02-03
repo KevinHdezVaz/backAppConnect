@@ -35,6 +35,17 @@ class User extends Authenticatable {
         'verified' => 'boolean',
     ];
 
+
+    public function team()
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    public function matchEvents()
+    {
+        return $this->hasMany(MatchEvent::class);
+    }
+    
  public function bookings()
 {
     return $this->hasMany(Booking::class);

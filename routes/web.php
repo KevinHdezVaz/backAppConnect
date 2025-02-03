@@ -6,6 +6,8 @@ use App\Http\Controllers\ResetController;
 use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
+use App\Http\Controllers\API\FieldController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ChangePasswordController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\FieldManagementController;
@@ -50,8 +52,21 @@ Route::middleware(['auth:admin'])->group(function () {
     })->name('virtual-reality');
 
 
-    Route::resource('field', FieldController::class);
+//    Route::resource('field', FieldController::class);
 
+
+Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
+
+
+
+ 
+// Ruta para mostrar el historial de notificaciones
+Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+ Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+ Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+ Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+
+ 
 
     Route::get('/user-management', [UserManagementController::class, 'index'])->name('user-management');
 Route::get('/user-management/{id}/edit', [UserManagementController::class, 'edit'])->name('user.edit');
@@ -61,13 +76,11 @@ Route::delete('/user-management/{id}', [UserManagementController::class, 'destro
 
 
 Route::get('/field-management', [FieldManagementController::class, 'index'])->name('field-management');
-Route::get('/field-management/create', [FieldManagementController::class, 'create'])->name('field.create');
-Route::post('/field-management', [FieldManagementController::class, 'store'])->name('field.store');
-
-// Después las rutas con parámetros
-Route::get('/field-management/{id}/edit', [FieldManagementController::class, 'edit'])->name('field.edit');
-Route::put('/field-management/{id}', [FieldManagementController::class, 'update'])->name('field.update');
-Route::delete('/field-management/{id}', [FieldManagementController::class, 'destroy'])->name('field.destroy');
+Route::get('/field-management/create', [FieldManagementController::class, 'create'])->name('field-management.create');
+Route::post('/field-management', [FieldManagementController::class, 'store'])->name('field-management.store');
+Route::get('/field-management/{id}/edit', [FieldManagementController::class, 'edit'])->name('field-management.edit');
+Route::put('/field-management/{id}', [FieldManagementController::class, 'update'])->name('field-management.update');
+Route::delete('/field-management/{id}', [FieldManagementController::class, 'destroy'])->name('field-management.destroy');
 
 
     Route::get('/logout', [SessionsController::class, 'destroy']);
