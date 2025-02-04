@@ -1,5 +1,9 @@
 <?php
+
 namespace App\Models;
+
+use App\Models\Equipo;
+use App\Models\Torneo;
 use Illuminate\Database\Eloquent\Model;
 
 class EstadisticaTorneo extends Model

@@ -3,7 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
-use App\Http\Controllers\InfoUserController;
+ use App\Http\Controllers\InfoUserController;
+use App\Http\Controllers\Torneo\TorneoController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
 use App\Http\Controllers\API\FieldController;
@@ -66,9 +67,16 @@ Route::get('/notifications', [NotificationController::class, 'index'])->name('no
  Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
  Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
 
- 
+ //torneo
+ Route::get('/tournament', [TorneoController::class, 'index'])->name('torneos.index');
+ Route::get('/tournament/create', [TorneoController::class, 'create'])->name('torneos.create');
+Route::post('/tournament', [TorneoController::class, 'store'])->name('torneos.store');
+Route::get('/tournament/{id}/edit', [TorneoController::class, 'edit'])->name('torneos.edit');
+Route::put('/tournament/{id}', [TorneoController::class, 'update'])->name('torneos.update');
+Route::delete('/tournament/{id}', [TorneoController::class, 'destroy'])->name('torneos.destroy');
 
-    Route::get('/user-management', [UserManagementController::class, 'index'])->name('user-management');
+
+Route::get('/user-management', [UserManagementController::class, 'index'])->name('user-management');
 Route::get('/user-management/{id}/edit', [UserManagementController::class, 'edit'])->name('user.edit');
 Route::put('/user-management/{id}', [UserManagementController::class, 'update'])->name('user.update');
 Route::delete('/user-management/{id}', [UserManagementController::class, 'destroy'])->name('user.destroy');

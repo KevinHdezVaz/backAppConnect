@@ -5,11 +5,18 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\API\BookingController;
-
+use App\Http\Controllers\API\TorneoAPIController;
 
  
-
-
+  
+    // Rutas para torneos
+    Route::group(['prefix' => 'torneos'], function () {
+        Route::get('/', [TorneoAPIController::class, 'index']);
+        Route::get('/{id}', [TorneoAPIController::class, 'show']);
+        Route::get('/status/{status}', [TorneoAPIController::class, 'getTorneosByStatus']);
+        Route::get('/filter/active', [TorneoAPIController::class, 'getActiveTournaments']);
+    });
+ 
 Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAvailableHours'])
     ->middleware('auth:sanctum');
 

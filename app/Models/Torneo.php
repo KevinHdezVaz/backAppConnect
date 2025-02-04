@@ -1,5 +1,6 @@
 <?php
 namespace App\Models;
+use App\Models\Equipo;
 use Illuminate\Database\Eloquent\Model;
 
 class Torneo extends Model
@@ -15,13 +16,15 @@ class Torneo extends Model
         'cuota_inscripcion',
         'premio',
         'formato',
-        'reglas'
+        'reglas',
+        'imagenesTorneo'
     ];
 
     protected $casts = [
         'fecha_inicio' => 'date',
         'fecha_fin' => 'date',
-        'reglas' => 'array'
+        'reglas' => 'array',
+        'imagenesTorneo' => 'array' 
     ];
 
     public function equipos()
@@ -39,4 +42,18 @@ class Torneo extends Model
     {
         return $this->hasMany(EstadisticaTorneo::class);
     }
+
+    public function getEstadoColor()
+{
+    $colores = [
+        'borrador' => 'warning',  // Amarillo
+        'en_progreso' => 'info',      // Azul
+        'abierto' => 'success', // Verde
+        'cancelado' => 'danger',   // Rojo
+        'completado' => 'warning'
+    ];
+
+    return $colores[$this->estado] ?? 'secondary'; // Gris por defecto
+}
+
 }

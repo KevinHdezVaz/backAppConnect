@@ -32,6 +32,7 @@ class AuthController extends Controller
                 return response()->json(['message' => 'Error uploading image'], 500);
             }
         }
+        
         $validated['password'] = Hash::make($validated['password']);
         $user = User::create($validated);
     
