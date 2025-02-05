@@ -1,6 +1,5 @@
 <?php
-// app/Http/Controllers/API/BookingController.php
-namespace App\Http\Controllers\API;
+ namespace App\Http\Controllers\API;
 
 use Carbon\Carbon;
 use App\Models\Field;

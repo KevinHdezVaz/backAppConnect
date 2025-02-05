@@ -11,10 +11,7 @@
               <div class="card card-plain mt-8">
                 <div class="card-header pb-0 text-left bg-transparent">
                   <h3 class="font-weight-bolder text-info text-gradient">Bienvenido administrador</h3>
-                  <p class="mb-0">Create a new acount<br></p>
-                  <p class="mb-0">OR Sign in with these credentials:</p>
-                  <p class="mb-0">Email <b>admin@softui.com</b></p>
-                  <p class="mb-0">Password <b>secret</b></p>
+                 
                 </div>
                 <div class="card-body">
                 <form method="POST" action="{{ url('/login') }}">
@@ -38,7 +35,7 @@
                       <label class="form-check-label" for="rememberMe">Remember me</label>
                     </div>
                     <div class="text-center">
-                      <button type="submit" class="btn bg-gradient-info w-100 mt-4 mb-0">Sign in</button>
+                      <button type="submit" class="btn bg-gradient-info w-100 mt-4 mb-0">Entrar</button>
                     </div>
                   </form>
                 </div>
@@ -53,9 +50,10 @@
                 </div>
               </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <div class="oblique position-absolute top-0 h-100 d-md-block d-none me-n8">
-                <div class="oblique-image bg-cover position-absolute fixed-top ms-auto h-100 z-index-0 ms-n6" style="background-image:url('../assets/img/curved-images/curved6.jpg')"></div>
+                <div class="oblique-image bg-cover position-absolute fixed-top ms-auto h-100 z-index-0 ms-n12 "
+                 style="background-image:url('../assets/img/curved-images/uruguay.jpeg')"></div>
               </div>
             </div>
           </div>

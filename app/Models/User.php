@@ -45,10 +45,37 @@ class User extends Authenticatable {
     {
         return $this->hasMany(MatchEvent::class);
     }
+
     
  public function bookings()
 {
     return $this->hasMany(Booking::class);
 }
 
+
+public function equipos()
+{
+    return $this->belongsToMany(Equipo::class, 'equipo_usuarios')
+                ->withPivot('rol', 'estado')
+                ->withTimestamps();
+}
+ public function equipoActual()
+{
+    return $this->belongsToMany(Equipo::class, 'equipo_usuarios')
+                ->wherePivot('estado', 'activo')
+                ->first();
+}
+
+public function perteneceAEquipo()
+{
+    return $this->equipos()
+                ->wherePivot('estado', 'activo')
+                ->exists();
+}
+
+
+public function equiposCapitan()
+{
+    return $this->equipos()->wherePivot('rol', 'capitan');
+}
 }
