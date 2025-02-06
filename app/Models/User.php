@@ -22,7 +22,8 @@ class User extends Authenticatable {
         'phone',
         'codigo_postal',
         'profile_image',
-        'verified'
+        'verified',
+        'invite_code'
     ];
 
     protected $hidden = [

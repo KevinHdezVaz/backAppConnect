@@ -7,17 +7,28 @@ use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\API\BookingController;
 use App\Http\Controllers\API\TorneoAPIController;
+ 
 
  //ruta para equipo 
 Route::middleware('auth:sanctum')->group(function () {
+     Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
+    Route::get('/equipos/buscar-usuario/{codigo}', [EquipoController::class, 'buscarUsuarioPorCodigo']);
     Route::get('/equipos', [EquipoController::class, 'index']);
     Route::post('/equipos', [EquipoController::class, 'store']);
     Route::post('/equipos/{equipo}/invitar', [EquipoController::class, 'invitarMiembro']);
     Route::post('/equipos/{equipo}/aceptar', [EquipoController::class, 'aceptarInvitacion']);
     Route::post('/equipos/{equipo}/abandonar', [EquipoController::class, 'abandonarEquipo']);
     Route::post('/equipos/{equipo}/torneos', [EquipoController::class, 'unirseATorneo']);
+    Route::delete('equipos/{equipo}/miembros/{user}', [EquipoController::class, 'eliminarMiembro']);
+
+    Route::get('equipos/invitaciones/pendientes', [EquipoController::class, 'getInvitacionesPendientes']);
+    Route::post('equipos/{equipo}/aceptar', [EquipoController::class, 'aceptarInvitacion']);
+    Route::post('equipos/{equipo}/rechazar', [EquipoController::class, 'rechazarInvitacion']);
+    Route::get('equipos/invitaciones/pendientes/count', [EquipoController::class, 'getInvitacionesPendientesCount']);
+
 });
   
+
     // Rutas para torneos
     Route::group(['prefix' => 'torneos'], function () {
         Route::get('/', [TorneoAPIController::class, 'index']);

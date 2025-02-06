@@ -12,13 +12,15 @@ class EquipoController extends Controller
 {
     public function index()
     {
-        $equipos = Equipo::with('miembros')->get();
+        $userId = auth()->id();
+        $equipos = Equipo::whereHas('miembros', function($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->with('miembros')->get();
+        
         return response()->json($equipos);
     }
-
  
-    // app/Http/Controllers/API/EquipoController.php
-public function store(Request $request)
+ public function store(Request $request)
 {
     $request->validate([
         'nombre' => 'required|string|max:255',
@@ -64,6 +66,98 @@ public function store(Request $request)
     }
 }
 
+public function getInvitacionesPendientesCount()
+{
+    $count = DB::table('equipo_usuarios')
+        ->where('user_id', auth()->id())
+        ->where('estado', 'pendiente')
+        ->count();
+
+    return response()->json(['count' => $count]);
+}
+
+
+
+public function getInvitacionesPendientes()
+{
+    $userId = auth()->id();
+    
+    $equipos = Equipo::whereHas('miembros', function($query) use ($userId) {
+        $query->where('user_id', $userId)
+              ->where('estado', 'pendiente');
+    })->with('miembros')->get();
+    
+    return response()->json($equipos);
+}
+
+public function rechazarInvitacion(Equipo $equipo)
+{
+    $equipo->miembros()->detach(auth()->id());
+    
+    return response()->json([
+        'message' => 'Invitación rechazada exitosamente'
+    ]);
+}
+
+ 
+public function invitarPorCodigo(Request $request, Equipo $equipo)
+{
+    $request->validate([
+        'codigo' => 'required|string|size:8'
+    ]);
+
+    // Verificar si el usuario actual es capitán
+    if (!$equipo->esCapitan(auth()->user())) {
+        return response()->json([
+            'message' => 'Solo el capitán puede invitar miembros'
+        ], 403);
+    }
+
+    // Buscar usuario por código
+    $userToInvite = User::where('invite_code', $request->codigo)->first();
+
+    if (!$userToInvite) {
+        return response()->json([
+            'message' => 'Código de usuario inválido'
+        ], 404);
+    }
+
+    // Verificar si ya es miembro del equipo
+    if ($equipo->miembros()->where('user_id', $userToInvite->id)->exists()) {
+        return response()->json([
+            'message' => 'El usuario ya es miembro del equipo'
+        ], 400);
+    }
+
+    // Verificar si el usuario ya está en otro equipo
+    $userInOtherTeam = DB::table('equipo_usuarios')
+        ->where('user_id', $userToInvite->id)
+        ->where('estado', 'activo')
+        ->exists();
+
+    if ($userInOtherTeam) {
+        return response()->json([
+            'message' => 'El usuario ya pertenece a otro equipo'
+        ], 400);
+    }
+
+    try {
+        // Agregar al usuario como miembro pendiente
+        $equipo->miembros()->attach($userToInvite->id, [
+            'rol' => 'miembro',
+            'estado' => 'pendiente'
+        ]);
+
+        return response()->json([
+            'message' => 'Invitación enviada exitosamente'
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error al invitar usuario: ' . $e->getMessage());
+        return response()->json([
+            'message' => 'Error al procesar la invitación'
+        ], 500);
+    }
+}
 
 
 public function invitarMiembro(Request $request, Equipo $equipo)
@@ -119,6 +213,36 @@ public function invitarMiembro(Request $request, Equipo $equipo)
     }
 }
 
+
+public function buscarUsuarioPorCodigo($codigo)
+{
+    $user = User::where('invite_code', $codigo)->first();
+    
+    if (!$user) {
+        return response()->json(['message' => 'Usuario no encontrado'], 404);
+    }
+
+    return response()->json($user);
+}
+
+public function eliminarMiembro(Equipo $equipo, User $user)
+{
+    if (!$equipo->esCapitan(auth()->user())) {
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    if ($equipo->esCapitan($user)) {
+        return response()->json([
+            'error' => 'No se puede eliminar al capitán'
+        ], 400);
+    }
+
+    $equipo->miembros()->detach($user->id);
+    
+    return response()->json([
+        'message' => 'Miembro eliminado exitosamente'
+    ]);
+}
 
 public function aceptarInvitacion(Equipo $equipo)
 {

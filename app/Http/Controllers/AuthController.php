@@ -12,6 +12,7 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
+        // Validar los datos de entrada
         $validated = $request->validate([
             'name' => 'required|string',
             'email' => 'required|email|unique:users',
@@ -21,25 +22,41 @@ class AuthController extends Controller
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', 
         ]);
     
-        // Manejar imagen
+        // Generar un invite_code único
+        do {
+            $inviteCode = substr(md5($validated['email'] . time()), 0, 8);
+        } while (User::where('invite_code', $inviteCode)->exists());
+    
+        $validated['invite_code'] = $inviteCode;
+    
+        // Manejar la subida de la imagen de perfil (si se proporciona)
         if ($request->hasFile('profile_image')) {
             try {
+                // Guardar la imagen en el almacenamiento público
                 $path = $request->file('profile_image')->store('profiles', 'public');
                 $validated['profile_image'] = $path;
                 \Log::info('Image uploaded:', ['path' => $path]);
             } catch (\Exception $e) {
+                // Registrar el error si la subida de la imagen falla
                 \Log::error('Error uploading image:', ['error' => $e->getMessage()]);
                 return response()->json(['message' => 'Error uploading image'], 500);
             }
         }
-        
+    
+        // Hashear la contraseña antes de guardarla
         $validated['password'] = Hash::make($validated['password']);
+    
+        // Crear el usuario en la base de datos
         $user = User::create($validated);
     
+        // Crear un token de autenticación para el usuario
+        $token = $user->createToken('auth_token')->plainTextToken;
+    
+        // Devolver la respuesta con el usuario y el token
         return response()->json([
             'user' => $user,
-            'token' => $user->createToken('auth_token')->plainTextToken
-        ]);
+            'token' => $token
+        ], 201); // Código de estado 201: Created
     }
     
    public function login(Request $request) {
