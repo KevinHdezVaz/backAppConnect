@@ -21,7 +21,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/equipos/{equipo}/torneos', [EquipoController::class, 'unirseATorneo']);
     Route::delete('equipos/{equipo}/miembros/{user}', [EquipoController::class, 'eliminarMiembro']);
 
-    Route::get('equipos/invitaciones/pendientes', [EquipoController::class, 'getInvitacionesPendientes']);
+    Route::post('equipos/{equipo}/torneos/inscribir', [EquipoController::class, 'inscribirseATorneo']);
+
+     Route::get('equipos/invitaciones/pendientes', [EquipoController::class, 'getInvitacionesPendientes']);
     Route::post('equipos/{equipo}/aceptar', [EquipoController::class, 'aceptarInvitacion']);
     Route::post('equipos/{equipo}/rechazar', [EquipoController::class, 'rechazarInvitacion']);
     Route::get('equipos/invitaciones/pendientes/count', [EquipoController::class, 'getInvitacionesPendientesCount']);

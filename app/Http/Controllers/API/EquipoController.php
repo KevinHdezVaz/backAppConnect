@@ -160,6 +160,77 @@ public function invitarPorCodigo(Request $request, Equipo $equipo)
 }
 
 
+
+public function inscribirseATorneo(Request $request, Equipo $equipo, Torneo $torneo)
+{
+    // 1. Validaciones de Usuario
+    if (!$equipo->esCapitan(auth()->user())) {
+        return response()->json([
+            'message' => 'Solo el capitán puede inscribir al equipo'
+        ], 403);
+    }
+
+    // 2. Validaciones del Torneo
+    if ($torneo->estado !== 'abierto') {
+        return response()->json([
+            'message' => 'El torneo no está abierto para inscripciones'
+        ], 400);
+    }
+
+    if ($torneo->equipos()->count() >= $torneo->maximo_equipos) {
+        return response()->json([
+            'message' => 'El torneo ya alcanzó el máximo de equipos'
+        ], 400);
+    }
+
+    // 3. Validaciones del Equipo
+    if ($equipo->torneos()->where('torneo_id', $torneo->id)->exists()) {
+        return response()->json([
+            'message' => 'El equipo ya está inscrito en este torneo'
+        ], 400);
+    }
+
+    if ($equipo->miembros()->where('estado', 'activo')->count() < $torneo->minimo_jugadores) {
+        return response()->json([
+            'message' => 'El equipo no cumple con el mínimo de jugadores requerido'
+        ], 400);
+    }
+
+    // 4. Validación de Pago
+    if ($torneo->cuota_inscripcion > 0 && !$request->hasFile('comprobante')) {
+        return response()->json([
+            'message' => 'Debe subir el comprobante de pago'
+        ], 400);
+    }
+
+    try {
+        $comprobantePath = null;
+        if ($request->hasFile('comprobante')) {
+            $comprobantePath = $request->file('comprobante')
+                ->store('comprobantes/torneos', 'public');
+        }
+
+        $equipo->torneos()->attach($torneo->id, [
+            'estado' => 'pendiente',
+            'pago_confirmado' => false,
+            'comprobante' => $comprobantePath,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        return response()->json([
+            'message' => 'Inscripción realizada exitosamente'
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error al inscribir equipo: ' . $e->getMessage());
+        return response()->json([
+            'message' => 'Error al procesar la inscripción'
+        ], 500);
+    }
+}
+
+
 public function invitarMiembro(Request $request, Equipo $equipo)
 {
     $request->validate([
