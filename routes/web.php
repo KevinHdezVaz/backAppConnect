@@ -3,12 +3,12 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
- use App\Http\Controllers\InfoUserController;
-use App\Http\Controllers\Torneo\TorneoController;
+use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Torneo\TorneoController;
 use App\Http\Controllers\ChangePasswordController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\FieldManagementController;
@@ -25,13 +25,17 @@ Route::middleware(['guest'])->group(function () {
     Route::post('/reset-password', [ChangePasswordController::class, 'changePassword'])->name('password.update');
 });
 
+
+ 
+
+ 
 // Rutas protegidas para admin
 Route::middleware(['auth:admin'])->group(function () {
+ 
     Route::get('/', [HomeController::class, 'home']);
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
-    
+    Route::get('/dashboard', [HomeController::class, 'home'])->name('dashboard');   
+
+  
     Route::get('/billing', function () {
         return view('billing');
     })->name('billing');
@@ -56,14 +60,11 @@ Route::middleware(['auth:admin'])->group(function () {
 //    Route::resource('field', FieldController::class);
 
 
-Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
-
-
-
+//Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
  
 // Ruta para mostrar el historial de notificaciones
 Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
- Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+  Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
  Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
  Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
 
@@ -74,7 +75,7 @@ Route::post('/tournament', [TorneoController::class, 'store'])->name('torneos.st
 Route::get('/tournament/{id}/edit', [TorneoController::class, 'edit'])->name('torneos.edit');
 Route::put('/tournament/{id}', [TorneoController::class, 'update'])->name('torneos.update');
 Route::delete('/tournament/{id}', [TorneoController::class, 'destroy'])->name('torneos.destroy');
-
+Route::post('tournament/{id}/iniciar', [TorneoController::class, 'iniciarTorneo'])->name('torneos.iniciar');
 
 Route::get('/user-management', [UserManagementController::class, 'index'])->name('user-management');
 Route::get('/user-management/{id}/edit', [UserManagementController::class, 'edit'])->name('user.edit');

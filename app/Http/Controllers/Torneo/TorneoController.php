@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Torneo;
 
+use App\Models\Equipo;
 use App\Models\Torneo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use App\Http\Controllers\Controller;
 
 class TorneoController extends Controller
 {
@@ -22,7 +25,6 @@ class TorneoController extends Controller
     }
 
 
-    
     public function store(Request $request)
 {
     try {
@@ -43,43 +45,140 @@ class TorneoController extends Controller
         ]);
 
         if ($validator->fails()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'errors' => $validator->errors()
+                ], 422);
+            }
             return redirect()->back()
                 ->withErrors($validator)
                 ->withInput();
         }
 
-        // Procesar las imágenes
+        DB::beginTransaction();
+
+        // Procesar las imágenes igual que antes
         $imagePaths = [];
         if ($request->hasFile('imagenes')) {
             foreach ($request->file('imagenes') as $imagen) {
-                try {
-                    // Guardar la imagen de manera similar a AuthController
-                    $path = $imagen->store('torneos', 'public');
-                    $imagePaths[] = $path;
-                    \Log::info('Imagen subida:', ['path' => $path]);
-                } catch (\Exception $e) {
-                    \Log::error('Error al subir imagen:', ['error' => $e->getMessage()]);
-                    return redirect()->back()->with('error', 'Error al subir la imagen.');
-                }
+                $path = $imagen->store('torneos', 'public');
+                $imagePaths[] = $path;
             }
         }
 
-        // Crear el torneo con las imágenes
+        // Crear el torneo
         $torneoData = $request->except('imagenes');
         if (!empty($imagePaths)) {
             $torneoData['imagenesTorneo'] = json_encode($imagePaths);
         }
-
         $torneo = Torneo::create($torneoData);
 
-        return redirect()->route('torneos.index')->with('success', 'Torneo creado exitosamente.');
+        // Array completo de colores disponibles
+        $todosLosColores = [
+            ['nombre' => 'Verde', 'emoji' => '🟢'],
+            ['nombre' => 'Rojo', 'emoji' => '🔴'],
+            ['nombre' => 'Azul', 'emoji' => '🔵'],
+            ['nombre' => 'Amarillo', 'emoji' => '💛'],
+            ['nombre' => 'Naranja', 'emoji' => '🟠'],
+            ['nombre' => 'Morado', 'emoji' => '💜'],
+            ['nombre' => 'Negro', 'emoji' => '⚫'],
+            ['nombre' => 'Blanco', 'emoji' => '⚪'],
+            ['nombre' => 'Gris', 'emoji' => '⚪'],
+            ['nombre' => 'Dorado', 'emoji' => '🟡'],
+            ['nombre' => 'Plateado', 'emoji' => '⚪'],
+            ['nombre' => 'Rosa', 'emoji' => '💗'],
+            // Agrega más colores si es necesario
+        ];
+
+         // Asegurar que el estado está como string
+   
+
+        // Tomar solo los colores necesarios según maximo_equipos
+        $coloresNecesarios = array_slice($todosLosColores, 0, $request->maximo_equipos);
+
+        // Crear equipos con los colores seleccionados
+        foreach ($coloresNecesarios as $color) {
+            $equipo = Equipo::create([
+                'nombre' => $color['nombre'],
+                'color_uniforme' => $color['nombre'],
+                'es_abierto' => true,
+                'plazas_disponibles' => 7,
+            ]);
+
+            $torneo->equipos()->attach($equipo->id, [
+                'estado' => 'aceptado',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+        }
+
+        DB::commit();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Torneo creado exitosamente',
+                'torneo' => $torneo
+            ], 201);
+        }
+
+        return redirect()->route('torneos.index')
+            ->with('success', 'Torneo creado exitosamente.');
+
     } catch (\Exception $e) {
+        DB::rollback();
         \Log::error('Error al crear torneo: ' . $e->getMessage());
+        
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Error al crear el torneo',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
         return redirect()->back()
             ->with('error', 'Error al crear el torneo: ' . $e->getMessage())
             ->withInput();
     }
 }
+
+
+    public function iniciarTorneo($id)
+    {
+        try {
+            $torneo = Torneo::findOrFail($id);
+
+            // Verificar número mínimo de equipos con jugadores
+            $equiposActivos = $torneo->equipos()
+                ->whereHas('miembros', function($query) {
+                    $query->where('estado', 'activo');
+                })
+                ->count();
+
+            if ($equiposActivos < $torneo->minimo_equipos) {
+                return redirect()->back()
+                    ->with('error', 'No se puede iniciar el torneo. No se cumple el mínimo de equipos con jugadores.');
+            }
+
+            // Actualizar estado del torneo
+            $torneo->update(['estado' => 'en_progreso']);
+
+            // Eliminar equipos sin jugadores
+            $torneo->equipos()
+                ->whereDoesntHave('miembros', function($query) {
+                    $query->where('estado', 'activo');
+                })
+                ->delete();
+
+            return redirect()->back()->with('success', 'Torneo iniciado exitosamente.');
+
+        } catch (\Exception $e) {
+            \Log::error('Error al iniciar torneo: ' . $e->getMessage());
+            return redirect()->back()
+                ->with('error', 'Error al iniciar el torneo: ' . $e->getMessage());
+        }
+    }
+
+
 
 public function update(Request $request, $id)
 {

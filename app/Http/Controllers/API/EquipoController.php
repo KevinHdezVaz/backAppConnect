@@ -75,8 +75,289 @@ public function getInvitacionesPendientesCount()
 
     return response()->json(['count' => $count]);
 }
+public function unirseAEquipoAbierto(Request $request, Equipo $equipo)
+{
+    try {
+        DB::beginTransaction();
+
+        // Verificar si el usuario es capitán de algún equipo
+        $esCapitan = DB::table('equipo_usuarios')
+            ->where('user_id', $request->user_id)
+            ->where('rol', 'capitan')
+            ->where('estado', 'activo')
+            ->exists();
+
+        // Solo verificar si ya está en un equipo si NO es capitán
+        if (!$esCapitan) {
+            $usuarioEnEquipo = DB::table('equipo_usuarios')
+                ->where('user_id', $request->user_id)
+                ->where('estado', 'activo')
+                ->exists();
+
+            if ($usuarioEnEquipo) {
+                return response()->json([
+                    'message' => 'Ya perteneces a un equipo. Solo puedes estar en un equipo a la vez.'
+                ], 400);
+            }
+        }
+
+        // Resto del código...
+        DB::commit();
+        return response()->json(['message' => 'Te has unido al equipo exitosamente']);
+
+    } catch (\Exception $e) {
+        DB::rollback();
+        return response()->json([
+            'message' => 'Error al unirse al equipo',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 
 
+public function solicitarUnirseAEquipoPrivado(Equipo $equipo)
+{
+    try {
+        // Verificar que el equipo sea privado
+        if ($equipo->es_abierto) {
+            return response()->json([
+                'message' => 'Este es un equipo abierto'
+            ], 400);
+        }
+
+        // Verificar si el usuario ya está en otro equipo
+        $userInOtherTeam = DB::table('equipo_usuarios')
+            ->where('user_id', auth()->id())
+            ->where('estado', 'activo')
+            ->exists();
+
+        if ($userInOtherTeam) {
+            return response()->json([
+                'message' => 'Ya perteneces a otro equipo'
+            ], 400);
+        }
+
+        // Verificar si ya tiene una solicitud pendiente
+        $pendingSolicitud = $equipo->miembros()
+            ->where('user_id', auth()->id())
+            ->where('estado', 'pendiente')
+            ->exists();
+
+        if ($pendingSolicitud) {
+            return response()->json([
+                'message' => 'Ya tienes una solicitud pendiente para este equipo'
+            ], 400);
+        }
+
+        // Crear solicitud
+        $equipo->miembros()->attach(auth()->id(), [
+            'rol' => 'miembro',
+            'estado' => 'pendiente'
+        ]);
+
+        return response()->json([
+            'message' => 'Solicitud enviada exitosamente'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Error al enviar la solicitud',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+public function equiposDisponibles($torneoId)
+{
+    try {
+        $userId = auth()->id();
+        \Log::info('Iniciando búsqueda de equipos', [
+            'user_id' => $userId,
+            'torneo_id' => $torneoId
+        ]);
+
+        // 1. Primero obtener el equipo privado donde el usuario es capitán
+        $equipoPrivado = DB::table('equipos')
+            ->join('equipo_usuarios', 'equipos.id', '=', 'equipo_usuarios.equipo_id')
+            ->where('equipo_usuarios.user_id', $userId)
+            ->where('equipo_usuarios.rol', 'capitan')
+            ->where('equipo_usuarios.estado', 'activo')
+            ->where('equipos.es_abierto', 0)  // Cambiar true por 1
+
+            ->whereNotExists(function ($query) use ($torneoId) {
+                $query->select(DB::raw(1))
+                    ->from('torneo_equipos')
+                    ->whereRaw('torneo_equipos.equipo_id = equipos.id')
+                    ->where('torneo_equipos.torneo_id', $torneoId);
+            })
+            ->select('equipos.*');
+
+        \Log::info('Equipo privado query', [
+            'sql' => $equipoPrivado->toSql(),
+            'bindings' => $equipoPrivado->getBindings()
+        ]);
+
+        // 2. Obtener equipos abiertos del torneo
+        $equiposAbiertos = DB::table('equipos')
+            ->join('torneo_equipos', 'equipos.id', '=', 'torneo_equipos.equipo_id')
+             ->where('equipos.es_abierto', 1)  // Cambiar false por 0
+            ->where('torneo_equipos.torneo_id', $torneoId)
+            ->where('torneo_equipos.estado', 'aceptado')
+            ->select('equipos.*');
+
+        \Log::info('Equipos abiertos query', [
+            'sql' => $equiposAbiertos->toSql(),
+            'bindings' => $equiposAbiertos->getBindings()
+        ]);
+
+        // 3. Unir las consultas
+        $equiposQuery = $equipoPrivado->union($equiposAbiertos);
+        
+        // 4. Obtener los resultados
+        $equipos = $equiposQuery->get();
+
+        \Log::info('Equipos encontrados', [
+            'count' => $equipos->count(),
+            'equipos' => $equipos->toArray()
+        ]);
+
+        // 5. Cargar los miembros de cada equipo
+        $equiposConMiembros = [];
+        foreach ($equipos as $equipo) {
+            $miembros = DB::table('users')
+                ->join('equipo_usuarios', 'users.id', '=', 'equipo_usuarios.user_id')
+                ->where('equipo_usuarios.equipo_id', $equipo->id)
+                ->where('equipo_usuarios.estado', 'activo')
+                ->select(
+                    'users.id',
+                    'users.name',
+                    'users.email',
+                    'users.phone',
+                    'users.profile_image',
+                    'users.verified',
+                    'equipo_usuarios.rol',
+                    'equipo_usuarios.estado',
+                    'equipo_usuarios.posicion',
+                    'equipo_usuarios.equipo_id',
+                    'equipo_usuarios.user_id',
+                    'equipo_usuarios.created_at',
+                    'equipo_usuarios.updated_at'
+                )
+                ->get();
+
+ 
+            $equipoData = (array) $equipo;
+            $equipoData['es_abierto'] = $equipo->es_abierto;  // Quitar el cast a (bool)
+
+
+             $equipoData['miembros'] = $miembros->map(function($miembro) {
+                $pivotData = [
+                    'equipo_id' => $miembro->equipo_id,
+                    'user_id' => $miembro->user_id,
+                    'rol' => $miembro->rol,
+                    'estado' => $miembro->estado,
+                    'posicion' => $miembro->posicion,
+                    'created_at' => $miembro->created_at,
+                    'updated_at' => $miembro->updated_at
+                ];
+
+                return [
+                    'id' => $miembro->id,
+                    'name' => $miembro->name,
+                    'email' => $miembro->email,
+                    'phone' => $miembro->phone,
+                    'profile_image' => $miembro->profile_image,
+                    'verified' => $miembro->verified,
+                    'rol' => $miembro->rol,
+                    'estado' => $miembro->estado,
+                    'posicion' => $miembro->posicion,
+                    'equipo_id' => $miembro->equipo_id,
+                    'user_id' => $miembro->id,
+                    'pivot' => $pivotData
+                ];
+            });
+            
+            $equiposConMiembros[] = $equipoData;
+        }
+
+        return response()->json($equiposConMiembros);
+
+    } catch (\Exception $e) {
+        \Log::error('Error en equiposDisponibles', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'message' => 'Error al obtener equipos',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+public function inscribirEquipoEnTorneo(Request $request, Equipo $equipo, $torneoId)
+{
+    try {
+        // 1. Validaciones básicas
+        if (!$equipo->esCapitan(auth()->user())) {
+            return response()->json([
+                'message' => 'Solo el capitán puede inscribir al equipo'
+            ], 403);
+        }
+
+        $request->validate([
+            'miembros' => 'required|array|min:5',
+            'miembros.*.user_id' => 'required|exists:users,id',
+            'miembros.*.posicion' => 'required|string'
+        ]);
+
+        DB::beginTransaction();
+
+        // 2. Verificar que los miembros pertenezcan al equipo
+        foreach ($request->miembros as $miembro) {
+            $pertenece = $equipo->miembros()
+                ->where('user_id', $miembro['user_id'])
+                ->where('estado', 'activo')
+                ->exists();
+
+            if (!$pertenece) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Uno o más miembros no pertenecen al equipo'
+                ], 400);
+            }
+        }
+
+        // 3. Actualizar las posiciones de los miembros para el torneo
+        foreach ($request->miembros as $miembro) {
+            $equipo->miembros()
+                ->where('user_id', $miembro['user_id'])
+                ->update([
+                    'posicion' => $miembro['posicion']
+                ]);
+        }
+
+        // 4. Inscribir al equipo en el torneo
+        $equipo->torneos()->attach($torneoId, [
+            'estado' => 'aceptado',
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Equipo inscrito exitosamente en el torneo'
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error al inscribir equipo en torneo: ' . $e->getMessage());
+        return response()->json([
+            'message' => 'Error al inscribir el equipo',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 
 public function getInvitacionesPendientes()
 {

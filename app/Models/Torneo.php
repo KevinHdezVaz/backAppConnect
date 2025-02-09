@@ -32,6 +32,7 @@ class Torneo extends Model
         return $this->belongsToMany(Equipo::class, 'torneo_equipos')
                     ->withPivot('estado', 'pago_confirmado');
     }
+    
 
     public function partidos()
     {

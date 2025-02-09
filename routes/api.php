@@ -3,12 +3,12 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\FieldController;
+use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\BookingController;
 use App\Http\Controllers\API\TorneoAPIController;
+use App\Http\Controllers\API\NotificationApiController;
  
-
  //ruta para equipo 
 Route::middleware('auth:sanctum')->group(function () {
      Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
@@ -23,21 +23,34 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('equipos/{equipo}/torneos/inscribir', [EquipoController::class, 'inscribirseATorneo']);
 
+    Route::post('equipos/{equipo}/unirse-abierto', [EquipoController::class, 'unirseAEquipoAbierto']);
+    Route::post('equipos/{equipo}/solicitar-union', [EquipoController::class, 'solicitarUnirseAEquipoPrivado']);
+
+    
      Route::get('equipos/invitaciones/pendientes', [EquipoController::class, 'getInvitacionesPendientes']);
     Route::post('equipos/{equipo}/aceptar', [EquipoController::class, 'aceptarInvitacion']);
     Route::post('equipos/{equipo}/rechazar', [EquipoController::class, 'rechazarInvitacion']);
     Route::get('equipos/invitaciones/pendientes/count', [EquipoController::class, 'getInvitacionesPendientesCount']);
-
+ 
+    Route::post('equipos/{equipo}/torneos/{torneo}/inscribir-con-posiciones', [EquipoController::class, 'inscribirEquipoEnTorneo']);
 });
   
 
-    // Rutas para torneos
-    Route::group(['prefix' => 'torneos'], function () {
-        Route::get('/', [TorneoAPIController::class, 'index']);
-        Route::get('/{id}', [TorneoAPIController::class, 'show']);
-        Route::get('/status/{status}', [TorneoAPIController::class, 'getTorneosByStatus']);
-        Route::get('/filter/active', [TorneoAPIController::class, 'getActiveTournaments']);
-    });
+// Rutas para torneos
+Route::group(['prefix' => 'torneos'], function () {
+    Route::get('/', [TorneoAPIController::class, 'index']);
+    Route::get('/{id}', [TorneoAPIController::class, 'show']);
+    Route::get('/status/{status}', [TorneoAPIController::class, 'getTorneosByStatus']);
+    Route::get('/filter/active', [TorneoAPIController::class, 'getActiveTournaments']);
+    // Cambiar esta línea
+    Route::get('/{torneoId}/equipos-disponibles', [EquipoController::class, 'equiposDisponibles']);
+ });
+
+   
+ 
+Route::post('/store-player-id', [NotificationApiController::class, 'storePlayerId']);
+
+
  
 Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAvailableHours'])
     ->middleware('auth:sanctum');

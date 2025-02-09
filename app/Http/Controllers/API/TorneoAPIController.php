@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Models\Equipo;
 use App\Models\Torneo;
 use Illuminate\Http\Request;
 use App\Models\EstadisticaTorneo;
@@ -40,6 +41,9 @@ public function index()
     }
 }
    
+
+ 
+
 
 // TorneoAPIController.php
 public function show($id)
