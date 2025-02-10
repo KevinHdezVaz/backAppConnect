@@ -23,6 +23,11 @@ class Kernel extends HttpKernel
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
     ];
 
+    protected function schedule(Schedule $schedule)
+{
+    $schedule->command('bookings:update-statuses')->everyMinute();
+}
+
     /**
      * The application's route middleware groups.
      *

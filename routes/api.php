@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\BookingController;
+use App\Http\Controllers\API\ChatMensajeController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\API\NotificationApiController;
  
@@ -61,16 +62,29 @@ Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAva
     
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    
+    Route::match(['PUT', 'POST'], '/profile', [AuthController::class, 'updateProfile']);
+    
+    Route::get('/fields/{field}/sync-hours', [FieldController::class, 'syncFieldHours']);
+    Route::get('/fields/{field}/booked-hours', [FieldController::class, 'getBookedHours']);
+
+    
+    Route::get('/chat/equipos/{equipoId}/mensajes', [ChatMensajeController::class, 'getMensajesEquipo']);
+    Route::post('/chat/mensaje', [ChatMensajeController::class, 'store']);
+
     
     Route::get('/fields', [FieldController::class, 'index']);
     Route::get('/fields/{field}', [FieldController::class, 'show']);
     Route::get('/fields/{field}/availability', [FieldController::class, 'checkAvailability']);
     Route::post('/bookings', [BookingController::class, 'store']);
    
- 
+    Route::get('/fields/{field}/booked-hours', [FieldController::class, 'getBookedHours']);
+    Route::post('/fields/{field}/update-hours', [FieldController::class, 'updateAvailableHours']);
+
     Route::get('/bookings', [BookingController::class, 'index']);
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::put('/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
@@ -81,6 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 Route::post('/check-email', [AuthController::class, 'checkEmail']);
 Route::post('/check-phone', [AuthController::class, 'checkPhone']);
+
 
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);

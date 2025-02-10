@@ -2,6 +2,7 @@
 namespace App\Models;
 
 use App\Models\Booking;
+use App\Models\ChatMensaje;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,15 +17,9 @@ class User extends Authenticatable {
     }
 
     protected $fillable = [
-        'name',
-        'email',
-        'password',
-        'phone',
-        'codigo_postal',
-        'profile_image',
-        'verified',
-        'invite_code'
+        'name', 'email', 'phone', 'codigo_postal', 'posicion', 'profile_image', // Asegúrate de que los campos estén en $fillable
     ];
+
 
     protected $hidden = [
         'password',
@@ -62,6 +57,11 @@ public function equipos()
 }
 
 
+// app/Models/User.php
+public function mensajes()
+{
+    return $this->hasMany(ChatMensaje::class);
+}
  public function equipoActual()
 {
     return $this->belongsToMany(Equipo::class, 'equipo_usuarios')

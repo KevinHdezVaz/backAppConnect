@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\User;
+use App\Models\ChatMensaje;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -55,6 +56,10 @@ public function cantidadMiembros()
     return $this->miembrosActivos()->count();
 }
 
+ public function mensajes()
+{
+    return $this->hasMany(ChatMensaje::class);
+}
 
 public function esCapitan($user)
 {

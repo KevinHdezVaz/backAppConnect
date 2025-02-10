@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -124,8 +125,45 @@ public function loginWithGoogle(Request $request)
    $request->validate(['phone' => 'required']);
    $exists = User::where('phone', $request->phone)->exists();
    return response()->json(['exists' => $exists]); 
+
+
 }
 
+
+
+
+public function updateProfile(Request $request)
+{
+    \Log::info('Request completo:', $request->all());
+    \Log::info('Files:', $request->allFiles());
+    
+    // Obtener el usuario
+    $user = $request->user();
+    
+    // Actualizar campos si existen en la solicitud
+    if ($request->has('name')) {
+        $user->name = $request->input('name');
+    }
+    if ($request->has('phone')) {
+        $user->phone = $request->input('phone');
+    }
+    if ($request->has('codigo_postal')) {
+        $user->codigo_postal = $request->input('codigo_postal');
+    }
+    if ($request->has('posicion')) {
+        $user->posicion = $request->input('posicion');
+    }
+
+    // Guardar los cambios
+    $user->save();
+    
+    \Log::info('Usuario actualizado:', $user->toArray());
+
+    return response()->json([
+        'message' => 'Perfil actualizado correctamente',
+        'user' => $user
+    ]);
+}
 
 public function checkEmail(Request $request)
 {
