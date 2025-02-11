@@ -3,11 +3,12 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\StoryController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\BookingController;
-use App\Http\Controllers\API\ChatMensajeController;
 use App\Http\Controllers\API\TorneoAPIController;
+use App\Http\Controllers\API\ChatMensajeController;
 use App\Http\Controllers\API\NotificationApiController;
  
  //ruta para equipo 
@@ -36,7 +37,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('equipos/{equipo}/torneos/{torneo}/inscribir-con-posiciones', [EquipoController::class, 'inscribirEquipoEnTorneo']);
 });
   
-
+Route::get('/stories', [StoryController::class, 'getStoriesApi']);
+ 
 // Rutas para torneos
 Route::group(['prefix' => 'torneos'], function () {
     Route::get('/', [TorneoAPIController::class, 'index']);

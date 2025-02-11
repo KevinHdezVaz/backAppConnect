@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
+use App\Http\Controllers\StoryController;
 use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
@@ -36,6 +37,13 @@ Route::middleware(['auth:admin'])->group(function () {
     Route::get('/dashboard', [HomeController::class, 'home'])->name('dashboard');   
 
   
+    Route::get('/stories', [StoryController::class, 'index'])->name('admin.stories.index');
+    Route::get('/stories/create', [StoryController::class, 'create'])->name('admin.stories.create');
+    Route::post('/stories', [StoryController::class, 'store'])->name('admin.stories.store');
+    Route::delete('/stories/{story}', [StoryController::class, 'destroy'])->name('admin.stories.destroy');
+
+
+    
     Route::get('/billing', function () {
         return view('billing');
     })->name('billing');
