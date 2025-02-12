@@ -42,48 +42,54 @@ class StoryController extends Controller
             'status' => 'success',
             'data' => $story
         ]);
+    } 
+
+ 
+ public function store(Request $request)
+{
+    try {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+            'video' => 'nullable|mimetypes:video/mp4|max:10240'
+        ]);
+
+        // Asegurarnos de que el directorio existe
+        Storage::disk('public')->makeDirectory('stories');
+
+        $imageName = time() . '_' . str_replace(' ', '_', $request->file('image')->getClientOriginalName());
+        
+        // Guardar la imagen y obtener la ruta relativa
+        $imagePath = $request->file('image')->storeAs(
+            'stories', 
+            $imageName, 
+            'public'
+        );
+
+        // Log para depuración
+        \Log::info('Imagen guardada:', [
+            'path' => $imagePath,
+            'full_path' => Storage::disk('public')->path($imagePath),
+            'exists' => Storage::disk('public')->exists($imagePath)
+        ]);
+
+        $story = Stories::create([
+            'title' => $request->title,
+            'image_url' => $imagePath,
+            'administrator_id' => auth()->guard('admin')->id(),
+            'expires_at' => now()->addHours(24),
+            'is_active' => true
+        ]);
+
+        return redirect()->route('admin.stories.index')
+            ->with('success', 'Historia creada exitosamente');
+
+    } catch (\Exception $e) {
+        \Log::error('Error creating story: ' . $e->getMessage());
+        return back()->withErrors(['error' => 'Error al crear la historia'])->withInput();
     }
-    public function store(Request $request)
-    {
-        try {
-            $request->validate([
-                'title' => 'required|string|max:255',
-                'image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-                'video' => 'nullable|mimetypes:video/mp4|max:10240'
-            ]);
-    
-            // Asegurarse de que el directorio existe
-            Storage::makeDirectory('public/stories');
-            
-            // Guardar imagen con nombre único
-            $imageName = time() . '_' . $request->file('image')->getClientOriginalName();
-            $imagePath = $request->file('image')->storeAs('stories', $imageName, 'public');
-            
-            $videoPath = null;
-            if ($request->hasFile('video')) {
-                $videoName = time() . '_' . $request->file('video')->getClientOriginalName();
-                $videoPath = $request->file('video')->storeAs('stories/videos', $videoName, 'public');
-            }
-    
-            $story = Stories::create([
-                'title' => $request->title,
-                'image_url' => $imagePath,
-                'video_url' => $videoPath ?  $videoPath : null,
-                'administrator_id' => auth()->id(),
-                'expires_at' => now()->addHours(24),
-                'is_active' => true
-            ]);
-    
-            return redirect()->route('admin.stories.index')
-                ->with('success', 'Historia creada exitosamente');
-    
-        } catch (\Exception $e) {
-            \Log::error('Error creating story: ' . $e->getMessage());
-            return back()
-                ->withErrors(['error' => 'Error al crear la historia: ' . $e->getMessage()])
-                ->withInput();
-        }
-    }
+}
+
 
 public function getStoriesApi()
 {
@@ -94,12 +100,29 @@ public function getStoriesApi()
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function($story) {
-                $story->image_url = asset($story->image_url);
-                if ($story->video_url) {
-                    $story->video_url = asset($story->video_url);
-                }
-                return $story;
+                // Construir la URL correcta basada en la estructura de tu servidor
+                $imageUrl = $story->image_url 
+                    ? asset('storage/' . $story->image_url)  // Esto generará la URL correcta
+                    : null;
+                
+                return [
+                    'id' => $story->id,
+                    'title' => $story->title,
+                    'image_url' => $imageUrl,
+                    'video_url' => $story->video_url ? asset('storage/' . $story->video_url) : null,
+                    'is_active' => $story->is_active,
+                    'expires_at' => $story->expires_at,
+                    'administrator' => $story->administrator
+                ];
             });
+
+        // Agregar log para depuración
+        \Log::info('Primera historia URL:', [
+            'image_url' => $stories->first()->image_url ?? 'No hay historias',
+            'full_url' => asset('storage/' . ($stories->first()->image_url ?? '')),
+            'storage_path' => storage_path('app/public/stories'),
+            'public_path' => public_path('storage/stories')
+        ]);
 
         return response()->json([
             'status' => 'success',
@@ -113,4 +136,5 @@ public function getStoriesApi()
         ], 500);
     }
 }
+ 
 }

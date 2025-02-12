@@ -37,10 +37,16 @@
                                 @foreach($stories as $story)
                                     <tr>
                                         <td class="ps-4">{{ $story->title }}</td>
-                                        <td>
-    <img src="{{ Storage::url($story->image_url) }}" 
-         alt="Vista previa" 
-         class="avatar avatar-sm me-3">
+                                      <!-- Modificar la columna de imagen -->
+<td>
+    @if($story->image_url)
+        <img src="{{ asset('storage/' . $story->image_url) }}" 
+             alt="Vista previa" 
+             class="avatar avatar-sm me-3"
+         >
+    @else
+        <i class="fas fa-image text-secondary"></i>
+    @endif
 </td>
                                         <td>
                                             @if($story->video_url)
