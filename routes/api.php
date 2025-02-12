@@ -4,6 +4,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StoryController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\BookingController;
@@ -13,6 +15,19 @@ use App\Http\Controllers\API\NotificationApiController;
  
  //ruta para equipo 
 Route::middleware('auth:sanctum')->group(function () {
+
+    Route::prefix('payments')->group(function () {
+        Route::post('create-preference', [PaymentController::class, 'createPreference']);
+        Route::get('success', [PaymentController::class, 'success'])->name('payments.success');
+        Route::get('failure', [PaymentController::class, 'failure'])->name('payments.failure');
+        Route::get('pending', [PaymentController::class, 'pending'])->name('payments.pending');
+    });
+    
+    Route::post('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])->name('webhooks.mercadopago');
+    
+
+    
+    
      Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
     Route::get('/equipos/buscar-usuario/{codigo}', [EquipoController::class, 'buscarUsuarioPorCodigo']);
     Route::get('/equipos', [EquipoController::class, 'index']);
@@ -50,8 +65,9 @@ Route::group(['prefix' => 'torneos'], function () {
  });
 
    
+
  
-Route::post('/store-player-id', [NotificationApiController::class, 'storePlayerId']);
+ Route::post('/store-player-id', [NotificationApiController::class, 'storePlayerId']);
 
 
  
