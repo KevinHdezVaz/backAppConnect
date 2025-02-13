@@ -11,8 +11,25 @@ use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\BookingController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\API\ChatMensajeController;
+use App\Http\Middleware\ValidateMercadoPagoWebhook;
 use App\Http\Controllers\API\NotificationApiController;
  
+Route::post('/webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
+    ->middleware(ValidateMercadoPagoWebhook::class);
+
+//Route::post('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
+ //   ->name('webhooks.mercadopago')
+  //  ->middleware(['api', 'mp.webhook'])
+   // ->withoutMiddleware(['verify_csrf_token']); 
+
+    
+Route::get('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
+    ->name('webhooks.mercadopago.return')
+    ->middleware('api');
+
+
+
+
  //ruta para equipo 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -25,16 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     Route::get('payments/callback', [WebhookController::class, 'handleMercadoPago']);
 
-    
-    Route::post('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
-    ->name('webhooks.mercadopago')
-    ->middleware('api');
-
-    
-// También agregar una ruta GET para manejar el retorno de MercadoPago
-Route::get('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
-    ->name('webhooks.mercadopago.return')
-    ->middleware('api');
+     
 
      Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
     Route::get('/equipos/buscar-usuario/{codigo}', [EquipoController::class, 'buscarUsuarioPorCodigo']);

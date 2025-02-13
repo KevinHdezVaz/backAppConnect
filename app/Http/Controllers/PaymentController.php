@@ -58,13 +58,13 @@ class PaymentController extends Controller
             }, $request->items),
             'external_reference' => (string)$order->id,
             'back_urls' => [
-                'success' => 'footconnect://payment/success',
-                'failure' => 'footconnect://payment/failure',
-                'pending' => 'footconnect://payment/pending'
-            ],
+    'success' => 'https://proyect.aftconta.mx/payment/success',
+    'failure' => 'https://proyect.aftconta.mx/payment/failure',
+    'pending' => 'https://proyect.aftconta.mx/payment/pending',
+],
             'auto_return' => 'approved',
-            'notification_url' => secure_url('api/webhooks/mercadopago'),
-            'binary_mode' => true
+            'notification_url' => env('MP_WEBHOOK_URL'),
+            'binary_mode' => false  
         ];
 
         $preference = $this->mercadoPagoService->createPreference($preferenceData);

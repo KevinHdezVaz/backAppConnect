@@ -17,6 +17,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(MercadoPagoService::class, function ($app) {
             return new MercadoPagoService();
         });
+        
     }
 
     /**
