@@ -16,76 +16,72 @@ class PaymentController extends Controller
         $this->mercadoPagoService = $mercadoPagoService;
     }
 
-    public function createPreference(Request $request)
-    {
-        try {
-            Log::info('Received request:', $request->all());  // Agregar este log
-    
-            // Validar request
-            $request->validate([
-                'items' => 'required|array',
-                'items.*.title' => 'required|string',
-                'items.*.quantity' => 'required|integer|min:1',
-                'items.*.unit_price' => 'required|numeric|min:0',
-            ]);
-    
-            Log::info('Validation passed');  // Agregar este log
-    
-            // Crear orden en tu base de datos
-            $order = Order::create([
-                'user_id' => auth()->id(),
-                'total' => collect($request->items)->sum(function($item) {
-                    return $item['quantity'] * $item['unit_price'];
-                }),
-                'status' => 'pending'
-            ]);
-    
-            Log::info('Order created:', ['order_id' => $order->id]);  // Agregar este log
-    
+  public function createPreference(Request $request)
+{
+    try {
+        Log::info('Received request for preference:', $request->all());
 
-            // Preparar items para MercadoPago
-            $items = collect($request->items)->map(function($item) {
+        // Validar request
+        $request->validate([
+            'items' => 'required|array',
+            'field_id' => 'required|exists:fields,id',
+            'date' => 'required|date',
+            'start_time' => 'required',
+            'players_needed' => 'nullable|integer'
+        ]);
+
+        // Crear orden con la información de la reserva
+        $order = Order::create([
+            'user_id' => auth()->id(),
+            'total' => collect($request->items)->sum(function($item) {
+                return $item['quantity'] * $item['unit_price'];
+            }),
+            'status' => 'pending',
+            // Guardar la información de la reserva
+            'payment_details' => [
+                'field_id' => $request->field_id,
+                'date' => $request->date,
+                'start_time' => $request->start_time,
+                'players_needed' => $request->players_needed
+            ]
+        ]);
+
+        // Crear preferencia en MercadoPago
+        $preferenceData = [
+            'items' => array_map(function($item) {
                 return [
                     'title' => $item['title'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'currency_id' => 'MXN' // Cambiar según el país
+                    'currency_id' => 'MXN'
                 ];
-            })->toArray();
+            }, $request->items),
+            'external_reference' => (string)$order->id,
+            'back_urls' => [
+                'success' => 'footconnect://payment/success',
+                'failure' => 'footconnect://payment/failure',
+                'pending' => 'footconnect://payment/pending'
+            ],
+            'auto_return' => 'approved',
+            'notification_url' => secure_url('api/webhooks/mercadopago'),
+            'binary_mode' => true
+        ];
 
-            // URLs de retorno
-            $backUrls = [
-                'success' => route('payments.success'),
-                'failure' => route('payments.failure'),
-                'pending' => route('payments.pending')
-            ];
+        $preference = $this->mercadoPagoService->createPreference($preferenceData);
 
-            // Crear preferencia en MercadoPago
-            $preference = $this->mercadoPagoService->createPreference(
-                $items,
-                $backUrls,
-                $order->id // external_reference
-            );
+        // Actualizar orden con el ID de preferencia
+        $order->update(['preference_id' => $preference['id']]);
 
-            // Actualizar orden con preference_id
-            $order->update([
-                'preference_id' => $preference['id']
-            ]);
+        return response()->json([
+            'init_point' => $preference['init_point'],
+            'preference_id' => $preference['id']
+        ]);
 
-            return response()->json([
-                'init_point' => $preference['init_point'],
-                'preference_id' => $preference['id']
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Payment Error:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()  // Agregar el stack trace
-            ]);
-            return response()->json(['error' => 'Error processing payment'], 500);
-        }
+    } catch (\Exception $e) {
+        Log::error('Payment Error:', ['error' => $e->getMessage()]);
+        return response()->json(['error' => 'Error processing payment'], 500);
     }
-
+}
     public function success(Request $request)
     {
         try {

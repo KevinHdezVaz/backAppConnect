@@ -23,11 +23,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('pending', [PaymentController::class, 'pending'])->name('payments.pending');
     });
     
-    Route::post('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])->name('webhooks.mercadopago');
-    
+    Route::get('payments/callback', [WebhookController::class, 'handleMercadoPago']);
 
     
+    Route::post('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
+    ->name('webhooks.mercadopago')
+    ->middleware('api');
+
     
+// También agregar una ruta GET para manejar el retorno de MercadoPago
+Route::get('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
+    ->name('webhooks.mercadopago.return')
+    ->middleware('api');
+
      Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
     Route::get('/equipos/buscar-usuario/{codigo}', [EquipoController::class, 'buscarUsuarioPorCodigo']);
     Route::get('/equipos', [EquipoController::class, 'index']);

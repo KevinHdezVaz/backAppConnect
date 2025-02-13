@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
@@ -9,30 +10,32 @@ class MercadoPagoService
     protected $accessToken;
     protected $baseUrl = 'https://api.mercadopago.com';
 
+    public function getAccessToken()
+    {
+        return $this->accessToken;
+    }
+    
     public function __construct()
     {
         $this->accessToken = config('services.mercadopago.access_token');
+        
+        if (empty($this->accessToken)) {
+            Log::error('MercadoPago access token is not configured');
+            throw new \Exception('MercadoPago access token is not configured');
+        }
     }
 
-    public function createPreference(array $items, array $backUrls, $externalReference = null)
+    public function createPreference($preferenceData)
     {
         try {
-            Log::info('Creating MercadoPago preference:', [
-                'items' => $items,
-                'backUrls' => $backUrls,
-                'externalReference' => $externalReference
-            ]);
+            Log::info('Access Token:', ['token' => $this->accessToken]);
+            
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->accessToken,
+                'Content-Type' => 'application/json'
+            ])->post($this->baseUrl . '/checkout/preferences', $preferenceData);
 
-            $response = Http::withToken($this->accessToken)
-                ->post($this->baseUrl . '/checkout/preferences', [
-                    'items' => $items,
-                    'back_urls' => $backUrls,
-                    'external_reference' => $externalReference,
-                    'auto_return' => 'approved',
-                    'notification_url' => route('webhooks.mercadopago'),
-                ]);
-
-            Log::info('MercadoPago response:', [
+            Log::info('MercadoPago API Response:', [
                 'status' => $response->status(),
                 'body' => $response->json()
             ]);
@@ -42,7 +45,7 @@ class MercadoPagoService
             }
 
             Log::error('MercadoPago Error:', $response->json());
-            throw new \Exception('Error creating preference in MercadoPago: ' . json_encode($response->json()));
+            throw new \Exception('Error creating preference: ' . json_encode($response->json()));
         } catch (\Exception $e) {
             Log::error('MercadoPago Exception:', [
                 'message' => $e->getMessage(),
@@ -55,19 +58,19 @@ class MercadoPagoService
     public function getPaymentInfo($paymentId)
     {
         try {
-            $response = Http::withToken($this->accessToken)
-                ->get($this->baseUrl . "/v1/payments/{$paymentId}");
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->accessToken,
+                'Content-Type' => 'application/json'
+            ])->get($this->baseUrl . "/v1/payments/{$paymentId}");
 
             if ($response->successful()) {
                 return $response->json();
             }
 
-            Log::error('MercadoPago Payment Error:', $response->json());
-            throw new \Exception('Error getting payment info from MercadoPago');
+            throw new \Exception('Error getting payment info: ' . json_encode($response->json()));
         } catch (\Exception $e) {
-            Log::error('MercadoPago Exception:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+            Log::error('Error getting payment info:', [
+                'message' => $e->getMessage()
             ]);
             throw $e;
         }

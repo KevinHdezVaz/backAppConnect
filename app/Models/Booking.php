@@ -9,11 +9,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Booking extends Model {
     protected $fillable = [
-        'user_id', 'field_id', 'start_time', 'end_time', 'total_price',
-        'status', 'payment_status', 'payment_method', 'is_recurring',
-        'cancellation_reason', 'allow_joining', 'players_needed', 'player_list'
+        'user_id',
+        'field_id',
+        'start_time',
+        'end_time',
+        'total_price',
+        'status',
+        'payment_status',
+        'payment_id',
+        'players_needed',
+        'allow_joining'
     ];
- 
     protected $casts = [
         'start_time' => 'datetime',
         'end_time' => 'datetime',
