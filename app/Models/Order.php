@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
@@ -11,13 +10,13 @@ class Order extends Model
         'user_id',
         'total',
         'status',
-        'preference_id',
         'payment_id',
         'payment_details'
     ];
 
     protected $casts = [
-        'payment_details' => 'array'
+        'payment_details' => 'array',
+        'total' => 'decimal:2'
     ];
 
     public function user()

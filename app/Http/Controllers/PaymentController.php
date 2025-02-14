@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\MercadoPagoService;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Services\MercadoPagoService;
 
 class PaymentController extends Controller
 {
@@ -16,110 +16,157 @@ class PaymentController extends Controller
         $this->mercadoPagoService = $mercadoPagoService;
     }
 
-  public function createPreference(Request $request)
-{
-    try {
-        Log::info('Received request for preference:', $request->all());
-
-        // Validar request
-        $request->validate([
-            'items' => 'required|array',
-            'field_id' => 'required|exists:fields,id',
-            'date' => 'required|date',
-            'start_time' => 'required',
-            'players_needed' => 'nullable|integer'
-        ]);
-
-        // Crear orden con la información de la reserva
-        $order = Order::create([
-            'user_id' => auth()->id(),
-            'total' => collect($request->items)->sum(function($item) {
-                return $item['quantity'] * $item['unit_price'];
-            }),
-            'status' => 'pending',
-            // Guardar la información de la reserva
-            'payment_details' => [
-                'field_id' => $request->field_id,
-                'date' => $request->date,
-                'start_time' => $request->start_time,
-                'players_needed' => $request->players_needed
-            ]
-        ]);
-
-        // Crear preferencia en MercadoPago
-        $preferenceData = [
-            'items' => array_map(function($item) {
-                return [
-                    'title' => $item['title'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'currency_id' => 'MXN'
-                ];
-            }, $request->items),
-            'external_reference' => (string)$order->id,
-            'back_urls' => [
-    'success' => 'https://proyect.aftconta.mx/payment/success',
-    'failure' => 'https://proyect.aftconta.mx/payment/failure',
-    'pending' => 'https://proyect.aftconta.mx/payment/pending',
-],
-            'auto_return' => 'approved',
-            'notification_url' => env('MP_WEBHOOK_URL'),
-            'binary_mode' => false  
-        ];
-
-        $preference = $this->mercadoPagoService->createPreference($preferenceData);
-
-        // Actualizar orden con el ID de preferencia
-        $order->update(['preference_id' => $preference['id']]);
-
-        return response()->json([
-            'init_point' => $preference['init_point'],
-            'preference_id' => $preference['id']
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Payment Error:', ['error' => $e->getMessage()]);
-        return response()->json(['error' => 'Error processing payment'], 500);
-    }
-}
-    public function success(Request $request)
+    public function createPreference(Request $request)
     {
         try {
-            $paymentId = $request->payment_id;
-            $status = $request->status;
-            $externalReference = $request->external_reference;
+            Log::info('Creando preferencia de pago', $request->all());
 
-            // Obtener información detallada del pago
-            $paymentInfo = $this->mercadoPagoService->getPaymentInfo($paymentId);
+            // Validar la request
+            $request->validate([
+                'items' => 'required|array',
+                'items.*.title' => 'required|string',
+                'items.*.quantity' => 'required|integer',
+                'items.*.unit_price' => 'required|numeric',
+            ]);
 
-            // Actualizar orden
-            $order = Order::findOrFail($externalReference);
+            // Crear orden en la base de datos
+            $order = Order::create([
+                'user_id' => auth()->id(),
+                'total' => collect($request->items)->sum(function($item) {
+                    return $item['quantity'] * $item['unit_price'];
+                }),
+                'status' => 'pending',
+                'payment_details' => [
+                    'field_id' => $request->additionalData['field_id'] ?? null,
+                    'date' => $request->additionalData['date'] ?? null,
+                    'start_time' => $request->additionalData['start_time'] ?? null,
+                    'players_needed' => $request->additionalData['players_needed'] ?? null,
+                ]
+            ]);
+
+            $preferenceData = [
+                'items' => $request->items,
+                'back_urls' => [
+                    'success' => 'footconnect://checkout/success',
+                    'failure' => 'footconnect://checkout/failure',
+                    'pending' => 'footconnect://checkout/pending'
+                ],
+                'auto_return' => 'approved',
+                'external_reference' => (string) $order->id,
+                'notification_url' => 'https://proyect.aftconta.mx/api/webhook/mercadopago',
+            ];
+
+
+            if (isset($request->payer)) {
+                $preferenceData['payer'] = [
+                    'name' => $request->payer['name'],
+                    'email' => $request->payer['email']
+                ];
+            }
+
+            // Crear preferencia en MercadoPago
+            $preference = $this->mercadoPagoService->createPreference($preferenceData);
+
+            // Actualizar orden con información de la preferencia
             $order->update([
-                'status' => $status,
-                'payment_id' => $paymentId,
-                'payment_details' => $paymentInfo
+                'payment_details' => array_merge(
+                    $order->payment_details,
+                    ['preference_id' => $preference['id'] ?? null]
+                )
             ]);
 
             return response()->json([
-                'status' => 'success',
-                'message' => 'Payment processed successfully'
+                'init_point' => $preference['init_point'],
+                'order_id' => $order->id
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Success Callback Error:', ['message' => $e->getMessage()]);
-            return response()->json(['error' => 'Error processing callback'], 500);
+            Log::error('Error al crear preferencia', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Error al procesar el pago: ' . $e->getMessage()
+            ], 500);
         }
     }
 
-    public function failure(Request $request)
+    public function handleSuccess(Request $request)
     {
-        // Implementar lógica para pagos fallidos
-        return response()->json(['status' => 'failure']);
+        Log::info('Pago exitoso', $request->all());
+        try {
+            if ($request->payment_id) {
+                $paymentInfo = $this->mercadoPagoService->getPaymentInfo($request->payment_id);
+                $order = Order::findOrFail($paymentInfo['external_reference']);
+                $order->update([
+                    'status' => 'completed',
+                    'payment_id' => $request->payment_id,
+                    'payment_details' => array_merge(
+                        $order->payment_details,
+                        ['payment_info' => $paymentInfo]
+                    )
+                ]);
+            }
+            return redirect('footconnect://checkout/success');
+        } catch (\Exception $e) {
+            Log::error('Error en success callback', [
+                'error' => $e->getMessage(),
+                'request' => $request->all()
+            ]);
+            return redirect('footconnect://checkout/failure');
+        }
     }
 
-    public function pending(Request $request)
+    public function handleFailure(Request $request)
     {
-        // Implementar lógica para pagos pendientes
-        return response()->json(['status' => 'pending']);
+        Log::info('Pago fallido', $request->all());
+        try {
+            if ($request->payment_id) {
+                $paymentInfo = $this->mercadoPagoService->getPaymentInfo($request->payment_id);
+                $order = Order::findOrFail($paymentInfo['external_reference']);
+                $order->update([
+                    'status' => 'failed',
+                    'payment_id' => $request->payment_id,
+                    'payment_details' => array_merge(
+                        $order->payment_details,
+                        ['payment_info' => $paymentInfo]
+                    )
+                ]);
+            }
+            return redirect('footconnect://checkout/failure');
+        } catch (\Exception $e) {
+            Log::error('Error en failure callback', [
+                'error' => $e->getMessage(),
+                'request' => $request->all()
+            ]);
+            return redirect('footconnect://checkout/failure');
+        }
+    }
+
+    public function handlePending(Request $request)
+    {
+        Log::info('Pago pendiente', $request->all());
+        try {
+            if ($request->payment_id) {
+                $paymentInfo = $this->mercadoPagoService->getPaymentInfo($request->payment_id);
+                $order = Order::findOrFail($paymentInfo['external_reference']);
+                $order->update([
+                    'status' => 'pending',
+                    'payment_id' => $request->payment_id,
+                    'payment_details' => array_merge(
+                        $order->payment_details,
+                        ['payment_info' => $paymentInfo]
+                    )
+                ]);
+            }
+            return redirect('footconnect://checkout/pending');
+        } catch (\Exception $e) {
+            Log::error('Error en pending callback', [
+                'error' => $e->getMessage(),
+                'request' => $request->all()
+            ]);
+            return redirect('footconnect://checkout/failure');
+        }
     }
 }

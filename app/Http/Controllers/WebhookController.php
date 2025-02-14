@@ -19,19 +19,34 @@ class WebhookController extends Controller
         $this->mercadoPagoService = $mercadoPagoService;
     }
 
+    public function test()
+    {
+        // Endpoint para probar que el webhook está accesible
+        return response()->json(['status' => 'webhook endpoint is working']);
+    }
+
     public function handleMercadoPago(Request $request)
     {
         try {
             Log::info('=== MercadoPago Webhook Start ===');
             Log::info('Request Data:', $request->all());
+            Log::info('Request Headers:', $request->headers->all());
 
-            // Manejar diferentes tipos de notificaciones
+            // Validar que la petición viene de MercadoPago
+            if (!$this->validateMercadoPagoRequest($request)) {
+                Log::error('Invalid webhook signature');
+                return response()->json(['error' => 'Invalid signature'], 401);
+            }
+
             if ($request->type === 'payment') {
                 return $this->handlePaymentNotification($request);
             } else if ($request->topic === 'merchant_order') {
                 return $this->handleMerchantOrderNotification($request);
             } else {
-                Log::info('Notification type not handled:', ['type' => $request->type, 'topic' => $request->topic]);
+                Log::info('Notification type not handled:', [
+                    'type' => $request->type,
+                    'topic' => $request->topic
+                ]);
                 return response()->json(['status' => 'ignored']);
             }
         } catch (\Exception $e) {
@@ -43,13 +58,30 @@ class WebhookController extends Controller
         }
     }
 
+    private function validateMercadoPagoRequest(Request $request)
+    {
+        // Aquí puedes agregar validaciones adicionales si es necesario
+        return true;
+    }
+
     private function handlePaymentNotification(Request $request)
     {
-        $paymentId = $request->data['id'];
-        Log::info('Processing payment notification:', ['payment_id' => $paymentId]);
+        try {
+            $paymentId = $request->data['id'];
+            Log::info('Processing payment notification:', ['payment_id' => $paymentId]);
 
-        $paymentInfo = $this->mercadoPagoService->getPaymentInfo($paymentId);
-        return $this->processPayment($paymentInfo);
+            $paymentInfo = $this->mercadoPagoService->getPaymentInfo($paymentId);
+
+            Log::info('Payment info received:', $paymentInfo);
+
+            return $this->processPayment($paymentInfo);
+        } catch (\Exception $e) {
+            Log::error('Error in payment notification:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
     }
 
     private function handleMerchantOrderNotification(Request $request)
@@ -58,7 +90,6 @@ class WebhookController extends Controller
             $merchantOrderUrl = $request->resource;
             Log::info('Processing merchant order:', ['url' => $merchantOrderUrl]);
 
-            // Obtener información de la orden desde MercadoPago
             $response = Http::withToken($this->mercadoPagoService->getAccessToken())
                 ->get($merchantOrderUrl);
 
@@ -70,23 +101,26 @@ class WebhookController extends Controller
             $orderData = $response->json();
             Log::info('Merchant order data:', $orderData);
 
-            // Procesar los pagos asociados a la orden
+            $results = [];
             if (isset($orderData['payments']) && !empty($orderData['payments'])) {
                 foreach ($orderData['payments'] as $payment) {
                     if ($payment['status'] === 'approved') {
                         $paymentInfo = $this->mercadoPagoService->getPaymentInfo($payment['id']);
-                        $this->processPayment($paymentInfo);
+                        $results[] = $this->processPayment($paymentInfo);
                     }
                 }
             }
 
-            return response()->json(['status' => 'success']);
+            return response()->json([
+                'status' => 'success',
+                'results' => $results
+            ]);
         } catch (\Exception $e) {
             Log::error('Error processing merchant order:', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return response()->json(['error' => 'Error processing merchant order'], 500);
+            throw $e;
         }
     }
 
@@ -95,21 +129,14 @@ class WebhookController extends Controller
         try {
             Log::info('Processing payment:', $paymentInfo);
 
-            // Validar que el external_reference esté presente
             if (empty($paymentInfo['external_reference'])) {
-                Log::error('External reference not found in payment info:', $paymentInfo);
-                return response()->json(['error' => 'External reference not found'], 400);
+                throw new \Exception('External reference not found in payment info');
             }
 
-            // Buscar orden por external_reference
             $order = Order::where('id', $paymentInfo['external_reference'])->first();
 
             if (!$order) {
-                Log::error('Order not found:', [
-                    'payment_info' => $paymentInfo,
-                    'external_reference' => $paymentInfo['external_reference']
-                ]);
-                return response()->json(['error' => 'Order not found'], 404);
+                throw new \Exception('Order not found: ' . $paymentInfo['external_reference']);
             }
 
             Log::info('Order found:', [
@@ -118,66 +145,21 @@ class WebhookController extends Controller
             ]);
 
             if ($paymentInfo['status'] === 'approved') {
-                Log::info('Payment approved, creating booking');
-
-                // Actualizar orden con información completa del pago
-                $order->update([
-                    'status' => 'completed',
-                    'payment_id' => $paymentInfo['id'],
-                    'payment_details' => array_merge(
-                        $order->payment_details ?? [],
-                        ['payment_info' => $paymentInfo]
-                    )
-                ]);
-
-                // Verificar si ya existe una reserva
-                $existingBooking = Booking::where('payment_id', $paymentInfo['id'])->first();
-                if ($existingBooking) {
-                    Log::info('Booking already exists:', $existingBooking->toArray());
-                    return response()->json([
-                        'status' => 'success',
-                        'booking_id' => $existingBooking->id,
-                        'message' => 'Booking already exists'
-                    ]);
-                }
-
-                // Crear reserva
-                $booking = Booking::create([
-                    'user_id' => $order->user_id,
-                    'field_id' => $order->payment_details['field_id'],
-                    'start_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time']),
-                    'end_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time'])->addHour(),
-                    'total_price' => $order->total,
-                    'status' => 'confirmed',
-                    'payment_status' => 'completed',
-                    'payment_id' => $paymentInfo['id'],
-                    'players_needed' => $order->payment_details['players_needed'] ?? null,
-                    'allow_joining' => false
-                ]);
-
-                Log::info('Booking created successfully:', [
-                    'booking_id' => $booking->id,
-                    'user_id' => $booking->user_id,
-                    'field_id' => $booking->field_id,
-                    'start_time' => $booking->start_time,
-                    'payment_id' => $booking->payment_id
-                ]);
-
-                return response()->json([
-                    'status' => 'success',
-                    'booking_id' => $booking->id,
-                    'message' => 'New booking created'
-                ]);
+                return $this->handleApprovedPayment($order, $paymentInfo);
             }
 
-            // Si el pago no está aprobado
-            Log::info('Payment not approved:', [
+            // Manejar otros estados
+            $order->update([
                 'status' => $paymentInfo['status'],
-                'order_id' => $order->id
+                'payment_id' => $paymentInfo['id'],
+                'payment_details' => array_merge(
+                    $order->payment_details ?? [],
+                    ['payment_info' => $paymentInfo]
+                )
             ]);
 
             return response()->json([
-                'status' => 'pending',
+                'status' => 'updated',
                 'payment_status' => $paymentInfo['status']
             ]);
 
@@ -189,5 +171,54 @@ class WebhookController extends Controller
             ]);
             throw $e;
         }
+    }
+
+    private function handleApprovedPayment($order, $paymentInfo)
+    {
+        // Actualizar orden
+        $order->update([
+            'status' => 'completed',
+            'payment_id' => $paymentInfo['id'],
+            'payment_details' => array_merge(
+                $order->payment_details ?? [],
+                ['payment_info' => $paymentInfo]
+            )
+        ]);
+
+        // Verificar reserva existente
+        $existingBooking = Booking::where('payment_id', $paymentInfo['id'])->first();
+        if ($existingBooking) {
+            return response()->json([
+                'status' => 'success',
+                'booking_id' => $existingBooking->id,
+                'message' => 'Booking already exists'
+            ]);
+        }
+
+        // Crear nueva reserva
+        $booking = Booking::create([
+            'user_id' => $order->user_id,
+            'field_id' => $order->payment_details['field_id'],
+            'start_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time']),
+            'end_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time'])->addHour(),
+            'total_price' => $order->total,
+            'status' => 'confirmed',
+            'payment_status' => 'completed',
+            'payment_id' => $paymentInfo['id'],
+            'players_needed' => $order->payment_details['players_needed'] ?? null,
+            'allow_joining' => false
+        ]);
+
+        Log::info('Booking created successfully:', [
+            'booking_id' => $booking->id,
+            'field_id' => $booking->field_id,
+            'start_time' => $booking->start_time
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'booking_id' => $booking->id,
+            'message' => 'New booking created'
+        ]);
     }
 }

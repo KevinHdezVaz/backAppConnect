@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\MercadoPagoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
@@ -11,26 +12,26 @@ use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\BookingController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\API\ChatMensajeController;
-use App\Http\Middleware\ValidateMercadoPagoWebhook;
 use App\Http\Controllers\API\NotificationApiController;
- 
-Route::post('/webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
-    ->middleware(ValidateMercadoPagoWebhook::class);
-
-//Route::post('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
- //   ->name('webhooks.mercadopago')
-  //  ->middleware(['api', 'mp.webhook'])
-   // ->withoutMiddleware(['verify_csrf_token']); 
-
-    
-Route::get('webhooks/mercadopago', [WebhookController::class, 'handleMercadoPago'])
-    ->name('webhooks.mercadopago.return')
-    ->middleware('api');
 
 
+// Ruta para crear la preferencia de pago
+Route::post('/payments/create-preference', [MercadoPagoController::class, 'createPreference'])
+    ->middleware('auth:sanctum');
 
+// Rutas para los callbacks de MP
+Route::get('/payments/success', [MercadoPagoController::class, 'handleSuccess']);
+Route::get('/payments/failure', [MercadoPagoController::class, 'handleFailure']);
+Route::get('/payments/pending', [MercadoPagoController::class, 'handlePending']);
 
- //ruta para equipo 
+// Ruta para el webhook de MP
+Route::post('/payments/webhook', [MercadoPagoController::class, 'handleWebhook']);
+
+ // Rutas públicas para webhooks
+Route::get('webhook/test', [WebhookController::class, 'test']);
+Route::post('webhook/mercadopago', [WebhookController::class, 'handleMercadoPago']);
+
+ //ruta para equipo
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('payments')->group(function () {
@@ -39,10 +40,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('failure', [PaymentController::class, 'failure'])->name('payments.failure');
         Route::get('pending', [PaymentController::class, 'pending'])->name('payments.pending');
     });
-    
-    Route::get('payments/callback', [WebhookController::class, 'handleMercadoPago']);
-
-     
 
      Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
     Route::get('/equipos/buscar-usuario/{codigo}', [EquipoController::class, 'buscarUsuarioPorCodigo']);
@@ -59,17 +56,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('equipos/{equipo}/unirse-abierto', [EquipoController::class, 'unirseAEquipoAbierto']);
     Route::post('equipos/{equipo}/solicitar-union', [EquipoController::class, 'solicitarUnirseAEquipoPrivado']);
 
-    
+
      Route::get('equipos/invitaciones/pendientes', [EquipoController::class, 'getInvitacionesPendientes']);
     Route::post('equipos/{equipo}/aceptar', [EquipoController::class, 'aceptarInvitacion']);
     Route::post('equipos/{equipo}/rechazar', [EquipoController::class, 'rechazarInvitacion']);
     Route::get('equipos/invitaciones/pendientes/count', [EquipoController::class, 'getInvitacionesPendientesCount']);
- 
+
     Route::post('equipos/{equipo}/torneos/{torneo}/inscribir-con-posiciones', [EquipoController::class, 'inscribirEquipoEnTorneo']);
 });
-  
+
 Route::get('/stories', [StoryController::class, 'getStoriesApi']);
- 
+
 // Rutas para torneos
 Route::group(['prefix' => 'torneos'], function () {
     Route::get('/', [TorneoAPIController::class, 'index']);
@@ -80,42 +77,42 @@ Route::group(['prefix' => 'torneos'], function () {
     Route::get('/{torneoId}/equipos-disponibles', [EquipoController::class, 'equiposDisponibles']);
  });
 
-   
 
- 
+
+
  Route::post('/store-player-id', [NotificationApiController::class, 'storePlayerId']);
 
 
- 
+
 Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAvailableHours'])
     ->middleware('auth:sanctum');
 
     Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         return $request->user();
     });
-    
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
-    
+
     Route::match(['PUT', 'POST'], '/profile', [AuthController::class, 'updateProfile']);
-    
+
     Route::get('/fields/{field}/sync-hours', [FieldController::class, 'syncFieldHours']);
     Route::get('/fields/{field}/booked-hours', [FieldController::class, 'getBookedHours']);
 
-    
+
     Route::get('/chat/equipos/{equipoId}/mensajes', [ChatMensajeController::class, 'getMensajesEquipo']);
     Route::post('/chat/mensaje', [ChatMensajeController::class, 'store']);
 
-    
+
     Route::get('/fields', [FieldController::class, 'index']);
     Route::get('/fields/{field}', [FieldController::class, 'show']);
     Route::get('/fields/{field}/availability', [FieldController::class, 'checkAvailability']);
     Route::post('/bookings', [BookingController::class, 'store']);
-   
+
     Route::get('/fields/{field}/booked-hours', [FieldController::class, 'getBookedHours']);
     Route::post('/fields/{field}/update-hours', [FieldController::class, 'updateAvailableHours']);
 
@@ -134,4 +131,3 @@ Route::post('/check-phone', [AuthController::class, 'checkPhone']);
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
 Route::post('login/google', [AuthController::class, 'loginWithGoogle']);
- 
