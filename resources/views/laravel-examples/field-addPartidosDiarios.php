@@ -25,6 +25,19 @@
 
             <form action="{{ route('daily-matches.store') }}" method="POST">
                 @csrf
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="week_selection">Seleccionar Semana</label>
+                            <select name="week_selection" id="week_selection" class="form-control @error('week_selection') is-invalid @enderror" required>
+                                <option value="current">Esta semana ({{ now()->startOfWeek()->format('d/m/Y') }} - {{ now()->endOfWeek()->format('d/m/Y') }})</option>
+                                <option value="next">Próxima semana ({{ now()->addWeek()->startOfWeek()->format('d/m/Y') }} - {{ now()->addWeek()->endOfWeek()->format('d/m/Y') }})</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
@@ -48,7 +61,7 @@
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="row mt-4">
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="max_players">Máximo de Jugadores por Equipo</label>
@@ -72,68 +85,66 @@
                 </div>
 
                 <div class="form-group mt-4">
-                    <label>Días y Horarios</label>
+                    <label>Días y Horarios Disponibles</label>
                     <div class="table-responsive">
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Día</th>
-                                    <th>Activo</th>
-                                    <th>Hora Inicio</th>
-                                    <th>Hora Fin</th>
+                                    <th style="width: 15%">Día</th>
+                                    <th style="width: 15%">Activo</th>
+                                    <th>Horarios Disponibles</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] as $day)
-                                    <tr>
-                                        <td>{{ $day }}</td>
+                                @php
+                                    $days = [
+                                        'lunes' => 'Lunes',
+                                        'martes' => 'Martes',
+                                        'miercoles' => 'Miércoles',
+                                        'jueves' => 'Jueves',
+                                        'viernes' => 'Viernes',
+                                        'sabado' => 'Sábado',
+                                        'domingo' => 'Domingo'
+                                    ];
+
+                                    $hours = [];
+                                    for($i = 10; $i <= 19; $i++) {
+                                        $hours[] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
+                                    }
+                                @endphp
+
+                                @foreach($days as $dayKey => $dayName)
+                                    <tr class="day-row">
+                                        <td>{{ $dayName }}</td>
                                         <td>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input day-toggle" type="checkbox" 
-                                                       name="days[{{ strtolower($day) }}][active]"
-                                                       data-day="{{ strtolower($day) }}">
+                                                <input class="form-check-input day-toggle" 
+                                                       type="checkbox" 
+                                                       data-day="{{ $dayKey }}">
                                             </div>
                                         </td>
                                         <td>
-                                            <input type="time" class="form-control time-input" 
-                                                   name="days[{{ strtolower($day) }}][start_time]"
-                                                   data-day="{{ strtolower($day) }}" disabled>
-                                        </td>
-                                        <td>
-                                            <input type="time" class="form-control time-input" 
-                                                   name="days[{{ strtolower($day) }}][end_time]"
-                                                   data-day="{{ strtolower($day) }}" disabled>
+                                            <div class="hours-container" id="hours-{{ $dayKey }}" style="display: none">
+                                                @foreach($hours as $hour)
+                                                    <div class="form-check form-check-inline">
+                                                        <input class="form-check-input hour-checkbox" 
+                                                               type="checkbox" 
+                                                               name="days[{{ $dayKey }}][hours][]" 
+                                                               value="{{ $hour }}"
+                                                               disabled
+                                                               id="{{ $dayKey }}-{{ $hour }}">
+                                                        <label class="form-check-label" for="{{ $dayKey }}-{{ $hour }}">
+                                                            {{ $hour }}
+                                                        </label>
+                                                    </div>
+                                                @endforeach
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                <div class="row mt-4">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="start_date">Fecha de Inicio</label>
-                            <input type="date" name="start_date" 
-                                   class="form-control @error('start_date') is-invalid @enderror"
-                                   value="{{ old('start_date', now()->format('Y-m-d')) }}" required>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="end_date">Fecha de Fin (opcional)</label>
-                            <input type="date" name="end_date" 
-                                   class="form-control @error('end_date') is-invalid @enderror"
-                                   value="{{ old('end_date') }}">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-check form-switch mt-4">
-                    <input class="form-check-input" type="checkbox" name="is_active" checked>
-                    <label class="form-check-label">Partido Activo</label>
                 </div>
 
                 <div class="d-flex justify-content-end mt-4">
@@ -146,31 +157,106 @@
 </div>
 
 <script>
+
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Manejar la activación/desactivación de los horarios por día
-    document.querySelectorAll('.day-toggle').forEach(toggle => {
+    const weekSelector = document.getElementById('week_selection');
+    const dayToggles = document.querySelectorAll('.day-toggle');
+
+    function updateDaysAvailability() {
+        const isNextWeek = weekSelector.value === 'next';
+        const today = new Date();
+        
+        dayToggles.forEach(toggle => {
+            const dayName = toggle.dataset.day;
+            let dayDate = new Date();
+            
+            // Ajustar al inicio de la semana
+            dayDate.setDate(dayDate.getDate() - dayDate.getDay()); // Ir al domingo
+            
+            const dayMap = {
+                'domingo': 0,
+                'lunes': 1,
+                'martes': 2,
+                'miercoles': 3,
+                'jueves': 4,
+                'viernes': 5,
+                'sabado': 6
+            };
+            
+            // Avanzar al día correspondiente
+            dayDate.setDate(dayDate.getDate() + dayMap[dayName]);
+            
+            if (isNextWeek) {
+                dayDate.setDate(dayDate.getDate() + 7);
+                toggle.disabled = false;
+            } else {
+                // Para la semana actual, solo deshabilitar días anteriores
+                const todayWithoutTime = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
+                toggle.disabled = dayDateWithoutTime < todayWithoutTime;
+            }
+
+            if (toggle.disabled) {
+                toggle.checked = false;
+                const hoursContainer = document.getElementById(`hours-${dayName}`);
+                if (hoursContainer) {
+                    hoursContainer.style.display = 'none';
+                }
+            }
+            
+            console.log(`Día: ${dayName}, Fecha: ${dayDate.toLocaleDateString()}, Hoy: ${today.toLocaleDateString()}, Deshabilitado: ${toggle.disabled}`);
+        });
+    }
+
+    // Agregar evento para mostrar/ocultar horarios
+    dayToggles.forEach(toggle => {
         toggle.addEventListener('change', function() {
             const day = this.dataset.day;
-            const timeInputs = document.querySelectorAll(`.time-input[data-day="${day}"]`);
+            const hoursContainer = document.getElementById(`hours-${day}`);
+            const checkboxes = hoursContainer.querySelectorAll('.hour-checkbox');
             
-            timeInputs.forEach(input => {
-                input.disabled = !this.checked;
-                if (this.checked) {
-                    input.required = true;
-                    if (!input.value) {
-                        // Establecer valores por defecto
-                        if (input.name.includes('start_time')) {
-                            input.value = '08:00';
-                        } else {
-                            input.value = '22:00';
-                        }
-                    }
-                } else {
-                    input.required = false;
-                }
-            });
+            if (this.checked) {
+                hoursContainer.style.display = 'block';
+                checkboxes.forEach(checkbox => {
+                    checkbox.disabled = false;
+                });
+            } else {
+                hoursContainer.style.display = 'none';
+                checkboxes.forEach(checkbox => {
+                    checkbox.disabled = true;
+                    checkbox.checked = false;
+                });
+            }
         });
     });
+
+    weekSelector.addEventListener('change', updateDaysAvailability);
+    updateDaysAvailability(); // Llamada inicial
 });
 </script>
+
+<style>
+.hours-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.form-check-inline {
+    margin-right: 15px;
+    background-color: #f8f9fa;
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+.hour-checkbox:disabled + label {
+    color: #999;
+}
+
+.form-check-input:checked + label {
+    font-weight: bold;
+    color: #2196F3;
+}
+</style>
 @endsection

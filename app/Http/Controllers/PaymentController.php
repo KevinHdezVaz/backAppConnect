@@ -37,10 +37,10 @@ class PaymentController extends Controller
                 }),
                 'status' => 'pending',
                 'payment_details' => [
-                    'field_id' => $request->additionalData['field_id'] ?? null,
-                    'date' => $request->additionalData['date'] ?? null,
-                    'start_time' => $request->additionalData['start_time'] ?? null,
-                    'players_needed' => $request->additionalData['players_needed'] ?? null,
+                    'team_id' => $request->team_id,
+                    'position' => $request->position,
+                    'match_id' => $request->match_id,
+                    'type' => $request->type
                 ]
             ]);
 

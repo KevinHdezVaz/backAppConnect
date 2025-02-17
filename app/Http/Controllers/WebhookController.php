@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\Order;
 use App\Models\Booking;
-use Carbon\Carbon;
-use App\Services\MercadoPagoService;
+use App\Models\MatchTeam;
+use App\Models\DailyMatch;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Services\MercadoPagoService;
 use Illuminate\Support\Facades\Http;
+use App\Models\MatchPlayer;  // Añadir este import al inicio
 
 class WebhookController extends Controller
 {
@@ -144,6 +148,7 @@ class WebhookController extends Controller
                 'payment_details' => $order->payment_details
             ]);
 
+            
             if ($paymentInfo['status'] === 'approved') {
                 return $this->handleApprovedPayment($order, $paymentInfo);
             }
@@ -173,52 +178,68 @@ class WebhookController extends Controller
         }
     }
 
-    private function handleApprovedPayment($order, $paymentInfo)
-    {
-        // Actualizar orden
-        $order->update([
-            'status' => 'completed',
-            'payment_id' => $paymentInfo['id'],
-            'payment_details' => array_merge(
-                $order->payment_details ?? [],
-                ['payment_info' => $paymentInfo]
-            )
-        ]);
 
-        // Verificar reserva existente
-        $existingBooking = Booking::where('payment_id', $paymentInfo['id'])->first();
-        if ($existingBooking) {
-            return response()->json([
-                'status' => 'success',
-                'booking_id' => $existingBooking->id,
-                'message' => 'Booking already exists'
-            ]);
+    private function checkMatchStatus($match)
+{
+    // Contar jugadores con pago completado
+    $paidPlayersCount = MatchPlayer::where('match_id', $match->id)
+        ->where('payment_status', 'completed')
+        ->count();
+
+    $allTeamsFull = MatchTeam::where('equipo_partido_id', $match->id)
+        ->get()
+        ->every(function($team) {
+            return $team->player_count >= $team->max_players;
+        });
+
+    if ($paidPlayersCount >= ($match->max_players * 7) && $allTeamsFull) {
+        $match->update(['status' => 'confirmed']);
+        
+        // Aquí podrías agregar notificaciones a los jugadores
+        $this->notifyMatchConfirmed($match);
+    }
+
+
+}
+   
+private function handleApprovedPayment($order, $paymentInfo) {
+    try { 
+        DB::beginTransaction();
+
+        $paymentDetails = $order->payment_details;
+        
+        // Validar que los datos necesarios existen
+        if (!isset($paymentDetails['match_id'], $paymentDetails['team_id'], $paymentDetails['position'])) {
+            throw new \Exception('Datos de pago incompletos');
         }
 
-        // Crear nueva reserva
-        $booking = Booking::create([
-            'user_id' => $order->user_id,
-            'field_id' => $order->payment_details['field_id'],
-            'start_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time']),
-            'end_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time'])->addHour(),
-            'total_price' => $order->total,
-            'status' => 'confirmed',
+        // Validar que el equipo existe
+        $team = MatchTeam::find($paymentDetails['team_id']);
+        if (!$team) {
+            throw new \Exception('Equipo no encontrado');
+        }
+
+        // Crear el registro del jugador con los datos validados
+        MatchPlayer::create([
+            'match_id' => intval($paymentDetails['match_id']),
+            'player_id' => $order->user_id,
+            'equipo_partido_id' => intval($paymentDetails['team_id']),
+            'position' => $paymentDetails['position'],
             'payment_status' => 'completed',
             'payment_id' => $paymentInfo['id'],
-            'players_needed' => $order->payment_details['players_needed'] ?? null,
-            'allow_joining' => false
+            'amount' => $paymentInfo['transaction_amount']
         ]);
 
-        Log::info('Booking created successfully:', [
-            'booking_id' => $booking->id,
-            'field_id' => $booking->field_id,
-            'start_time' => $booking->start_time
-        ]);
+        // Actualizar el contador del equipo
+        $team->increment('player_count');
 
-        return response()->json([
-            'status' => 'success',
-            'booking_id' => $booking->id,
-            'message' => 'New booking created'
-        ]);
+        DB::commit();
+        return response()->json(['status' => 'success']);
+        
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error processing team join payment: ' . $e->getMessage());
+        throw $e;
     }
+}
 }

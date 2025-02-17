@@ -1,13 +1,14 @@
 <?php
-
 namespace App\Models;
 
+use App\Models\MatchTeam;
+use App\Models\MatchPlayer;
 use Illuminate\Database\Eloquent\Model;
 
 class DailyMatch extends Model
 {
     protected $table = 'equipo_partidos';
-
+    
     protected $fillable = [
         'name',
         'player_count',
@@ -34,26 +35,36 @@ class DailyMatch extends Model
         return $this->belongsTo(Field::class, 'field_id');
     }
 
-    // DailyMatch.php
-public function isFullyBooked()
-{
-    return $this->player_count >= $this->max_players;
-}
+    public function teams()
+    {
+        return $this->hasMany(MatchTeam::class, 'equipo_partido_id');
+    }
 
-public function canJoin(User $user)
-{
-    return !$this->isFullyBooked() && 
-           !$this->players()->where('player_id', $user->id)->exists();
-}
-
-public function getRemainingSpots()
-{
-    return $this->max_players - $this->player_count;
-}
+    public function players()
+    {
+        return $this->hasMany(MatchPlayer::class, 'match_id');
+    }
 
     public function partido()
     {
         return $this->belongsTo(Partido::class, 'partido_id');
+    }
+
+    // Métodos de utilidad
+    public function isFullyBooked()
+    {
+        return $this->player_count >= $this->max_players;
+    }
+
+    public function canJoin(User $user)
+    {
+        return !$this->isFullyBooked() && 
+               !$this->players()->where('player_id', $user->id)->exists();
+    }
+
+    public function getRemainingSpots()
+    {
+        return $this->max_players - $this->player_count;
     }
 
     // Modificadores de atributos para manejar los tiempos

@@ -72,11 +72,7 @@
                                             </span>
                                         </td>
                                         <td class="align-middle">
-                                            <a href="{{ route('daily-matches.edit', $match->id) }}" 
-                                               class="text-secondary font-weight-bold text-xs" 
-                                               data-toggle="tooltip" data-original-title="Edit match">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
+                                            
                                             <form action="{{ route('daily-matches.destroy', $match->id) }}" 
                                                   method="POST" class="d-inline">
                                                 @csrf

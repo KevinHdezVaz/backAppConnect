@@ -8,6 +8,7 @@ use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
 use App\Http\Controllers\API\FieldController;
+use App\Http\Controllers\DailyMatchController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Torneo\TorneoController;
 use App\Http\Controllers\ChangePasswordController;
@@ -26,9 +27,6 @@ Route::middleware(['guest'])->group(function () {
     Route::post('/reset-password', [ChangePasswordController::class, 'changePassword'])->name('password.update');
 });
 
-
- 
-
  
 // Rutas protegidas para admin
 Route::middleware(['auth:admin'])->group(function () {
@@ -43,7 +41,12 @@ Route::middleware(['auth:admin'])->group(function () {
     Route::delete('/stories/{story}', [StoryController::class, 'destroy'])->name('admin.stories.destroy');
 
 
-    
+    Route::get('/daily-matches', [DailyMatchController::class, 'index']);
+    Route::delete('/daily-matches/{match}', [DailyMatchController::class, 'destroy'])->name('daily-matches.destroy');
+     Route::get('/daily-matches/create', [DailyMatchController::class, 'create'])->name('daily-matches.create');
+    Route::post('/daily-matches', [DailyMatchController::class, 'store'])->name('daily-matches.store');
+    Route::get('/daily-matches', [DailyMatchController::class, 'index'])->name('daily-matches.index');
+
     Route::get('/billing', function () {
         return view('billing');
     })->name('billing');

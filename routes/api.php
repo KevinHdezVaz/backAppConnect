@@ -1,5 +1,4 @@
 <?php
-
 use App\Http\Controllers\MercadoPagoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -8,10 +7,13 @@ use App\Http\Controllers\StoryController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\API\FieldController;
+use App\Http\Controllers\MatchTeamController;
 use App\Http\Controllers\API\EquipoController;
+use App\Http\Controllers\DailyMatchController;
 use App\Http\Controllers\API\BookingController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\API\ChatMensajeController;
+use App\Http\Middleware\ValidateMercadoPagoWebhook;
 use App\Http\Controllers\API\NotificationApiController;
 
 
@@ -31,6 +33,8 @@ Route::post('/payments/webhook', [MercadoPagoController::class, 'handleWebhook']
 Route::get('webhook/test', [WebhookController::class, 'test']);
 Route::post('webhook/mercadopago', [WebhookController::class, 'handleMercadoPago']);
 
+
+
  //ruta para equipo
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -41,6 +45,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('pending', [PaymentController::class, 'pending'])->name('payments.pending');
     });
 
+
+    Route::get('/matches/{matchId}/teams', [MatchTeamController::class, 'getTeamsForMatch']);
+    Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']);
+    Route::post('/teams/{teamId}/leave', [MatchTeamController::class, 'leaveTeam']);
+
+     Route::get('matches/{match}/teams', [DailyMatchController::class, 'getMatchTeams']);
+    Route::get('/daily-matches', [DailyMatchController::class, 'getAvailableMatches']);
+    Route::post('/daily-matches/{match}/join', [DailyMatchController::class, 'joinMatch']);
+    Route::post('/daily-matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
+    Route::get('/daily-matches/{match}/players', [DailyMatchController::class, 'getMatchPlayers']);
+    
      Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
     Route::get('/equipos/buscar-usuario/{codigo}', [EquipoController::class, 'buscarUsuarioPorCodigo']);
     Route::get('/equipos', [EquipoController::class, 'index']);
