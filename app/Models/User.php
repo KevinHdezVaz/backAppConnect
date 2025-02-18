@@ -17,7 +17,7 @@ class User extends Authenticatable {
     }
 
     protected $fillable = [
-        'name', 'email', 'phone', 'codigo_postal', 'posicion', 'profile_image', // Asegúrate de que los campos estén en $fillable
+        'name', 'email', 'password', 'phone', 'codigo_postal', 'posicion', 'profile_image'
     ];
 
 

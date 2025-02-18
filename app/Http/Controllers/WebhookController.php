@@ -2,17 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
 use App\Models\Order;
 use App\Models\Booking;
-use App\Models\MatchTeam;
-use App\Models\DailyMatch;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 use App\Services\MercadoPagoService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
-use App\Models\MatchPlayer;  // Añadir este import al inicio
 
 class WebhookController extends Controller
 {
@@ -132,42 +128,48 @@ class WebhookController extends Controller
     {
         try {
             Log::info('Processing payment:', $paymentInfo);
-
+    
             if (empty($paymentInfo['external_reference'])) {
                 throw new \Exception('External reference not found in payment info');
             }
-
+    
             $order = Order::where('id', $paymentInfo['external_reference'])->first();
-
+    
             if (!$order) {
                 throw new \Exception('Order not found: ' . $paymentInfo['external_reference']);
             }
-
+    
             Log::info('Order found:', [
                 'order_id' => $order->id,
                 'payment_details' => $order->payment_details
             ]);
-
-            
-            if ($paymentInfo['status'] === 'approved') {
-                return $this->handleApprovedPayment($order, $paymentInfo);
+    
+            // Manejar todos los estados posibles
+            switch ($paymentInfo['status']) {
+                case 'approved':
+                    return $this->handleApprovedPayment($order, $paymentInfo);
+                case 'rejected':
+                case 'cancelled':
+                    $order->update(['status' => 'failed']);
+                    break;
+                case 'pending':
+                case 'in_process':
+                    $order->update(['status' => 'pending']);
+                    break;
+                case 'authorized':
+                    $order->update(['status' => 'authorized']);
+                    break;
+                default:
+                    Log::warning('Estado de pago desconocido:', ['status' => $paymentInfo['status']]);
+                    $order->update(['status' => 'unknown']);
+                    break;
             }
-
-            // Manejar otros estados
-            $order->update([
-                'status' => $paymentInfo['status'],
-                'payment_id' => $paymentInfo['id'],
-                'payment_details' => array_merge(
-                    $order->payment_details ?? [],
-                    ['payment_info' => $paymentInfo]
-                )
-            ]);
-
+    
             return response()->json([
                 'status' => 'updated',
                 'payment_status' => $paymentInfo['status']
             ]);
-
+    
         } catch (\Exception $e) {
             Log::error('Error processing payment:', [
                 'message' => $e->getMessage(),
@@ -177,69 +179,52 @@ class WebhookController extends Controller
             throw $e;
         }
     }
-
-
-    private function checkMatchStatus($match)
-{
-    // Contar jugadores con pago completado
-    $paidPlayersCount = MatchPlayer::where('match_id', $match->id)
-        ->where('payment_status', 'completed')
-        ->count();
-
-    $allTeamsFull = MatchTeam::where('equipo_partido_id', $match->id)
-        ->get()
-        ->every(function($team) {
-            return $team->player_count >= $team->max_players;
-        });
-
-    if ($paidPlayersCount >= ($match->max_players * 7) && $allTeamsFull) {
-        $match->update(['status' => 'confirmed']);
-        
-        // Aquí podrías agregar notificaciones a los jugadores
-        $this->notifyMatchConfirmed($match);
-    }
-
-
-}
-   
-private function handleApprovedPayment($order, $paymentInfo) {
-    try { 
-        DB::beginTransaction();
-
-        $paymentDetails = $order->payment_details;
-        
-        // Validar que los datos necesarios existen
-        if (!isset($paymentDetails['match_id'], $paymentDetails['team_id'], $paymentDetails['position'])) {
-            throw new \Exception('Datos de pago incompletos');
-        }
-
-        // Validar que el equipo existe
-        $team = MatchTeam::find($paymentDetails['team_id']);
-        if (!$team) {
-            throw new \Exception('Equipo no encontrado');
-        }
-
-        // Crear el registro del jugador con los datos validados
-        MatchPlayer::create([
-            'match_id' => intval($paymentDetails['match_id']),
-            'player_id' => $order->user_id,
-            'equipo_partido_id' => intval($paymentDetails['team_id']),
-            'position' => $paymentDetails['position'],
-            'payment_status' => 'completed',
+    private function handleApprovedPayment($order, $paymentInfo)
+    {
+        // Actualizar orden
+        $order->update([
+            'status' => 'completed',
             'payment_id' => $paymentInfo['id'],
-            'amount' => $paymentInfo['transaction_amount']
+            'payment_details' => array_merge(
+                $order->payment_details ?? [],
+                ['payment_info' => $paymentInfo]
+            )
         ]);
 
-        // Actualizar el contador del equipo
-        $team->increment('player_count');
+        // Verificar reserva existente
+        $existingBooking = Booking::where('payment_id', $paymentInfo['id'])->first();
+        if ($existingBooking) {
+            return response()->json([
+                'status' => 'success',
+                'booking_id' => $existingBooking->id,
+                'message' => 'Booking already exists'
+            ]);
+        }
 
-        DB::commit();
-        return response()->json(['status' => 'success']);
-        
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Error processing team join payment: ' . $e->getMessage());
-        throw $e;
+        // Crear nueva reserva
+        $booking = Booking::create([
+            'user_id' => $order->user_id,
+            'field_id' => $order->payment_details['field_id'],
+            'start_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time']),
+            'end_time' => Carbon::parse($order->payment_details['date'] . ' ' . $order->payment_details['start_time'])->addHour(),
+            'total_price' => $order->total,
+            'status' => 'confirmed',
+            'payment_status' => 'completed',
+            'payment_id' => $paymentInfo['id'],
+            'players_needed' => $order->payment_details['players_needed'] ?? null,
+            'allow_joining' => false
+        ]);
+
+        Log::info('Booking created successfully:', [
+            'booking_id' => $booking->id,
+            'field_id' => $booking->field_id,
+            'start_time' => $booking->start_time
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'booking_id' => $booking->id,
+            'message' => 'New booking created'
+        ]);
     }
-}
 }

@@ -222,8 +222,7 @@ class DailyMatchController extends Controller
         $fields = Field::all();
         return view('laravel-examples.field-addPartidosDiarios', compact('fields'));
     }
-
-    // Métodos para la API (consumidos por Flutter)
+ 
     public function getAvailableMatches()
     {
         \Log::info('Accediendo a getAvailableMatches');

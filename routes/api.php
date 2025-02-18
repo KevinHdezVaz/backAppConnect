@@ -1,5 +1,4 @@
 <?php
-use App\Http\Controllers\MercadoPagoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
@@ -11,6 +10,8 @@ use App\Http\Controllers\MatchTeamController;
 use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\DailyMatchController;
 use App\Http\Controllers\API\BookingController;
+use App\Http\Controllers\MercadoPagoController;
+use App\Http\Controllers\MatchPlayersController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\API\ChatMensajeController;
 use App\Http\Middleware\ValidateMercadoPagoWebhook;
@@ -28,7 +29,7 @@ Route::get('/payments/pending', [MercadoPagoController::class, 'handlePending'])
 
 // Ruta para el webhook de MP
 Route::post('/payments/webhook', [MercadoPagoController::class, 'handleWebhook']);
-
+ 
  // Rutas públicas para webhooks
 Route::get('webhook/test', [WebhookController::class, 'test']);
 Route::post('webhook/mercadopago', [WebhookController::class, 'handleMercadoPago']);
@@ -44,10 +45,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('failure', [PaymentController::class, 'failure'])->name('payments.failure');
         Route::get('pending', [PaymentController::class, 'pending'])->name('payments.pending');
     });
-
-
-    Route::get('/matches/{matchId}/teams', [MatchTeamController::class, 'getTeamsForMatch']);
-    Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']);
+ 
+        Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
+        Route::get('/matches/{matchId}/teams', [MatchPlayersController::class, 'getTeams']);
+    
+        Route::get('/payments/verify-status/{paymentId}', [PaymentController::class, 'verifyPaymentStatus']);
+ 
+  //  Route::get('/matches/{matchId}/teams', [MatchTeamController::class, 'getTeamsForMatch']);
+   // Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']);
     Route::post('/teams/{teamId}/leave', [MatchTeamController::class, 'leaveTeam']);
 
      Route::get('matches/{match}/teams', [DailyMatchController::class, 'getMatchTeams']);

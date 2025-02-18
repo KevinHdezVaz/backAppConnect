@@ -103,42 +103,27 @@ class MercadoPagoController extends Controller
 
     public function handleWebhook(Request $request)
     {
-        \Log::info('Webhook recibido', $request->all());
-
         try {
+            Log::info('Webhook recibido', $request->all());
+    
             $data = $request->all();
-
-            // Verificar el tipo de notificación
+    
             if ($data['type'] === 'payment') {
                 $payment_id = $data['data']['id'];
-
-                // Obtener información del pago
                 $payment = SDK::get("/v1/payments/$payment_id");
-
-                // Actualizar el estado del pedido según la información recibida
+    
                 $external_reference = $payment->external_reference;
                 $status = $payment->status;
-
-                // Aquí tu lógica para actualizar el pedido
-                switch ($status) {
-                    case 'approved':
-                        // Order::where('external_reference', $external_reference)
-                        //     ->update(['status' => 'completed']);
-                        break;
-                    case 'rejected':
-                        // Order::where('external_reference', $external_reference)
-                        //     ->update(['status' => 'failed']);
-                        break;
-                    case 'pending':
-                        // Order::where('external_reference', $external_reference)
-                        //     ->update(['status' => 'pending']);
-                        break;
-                }
+    
+                // Actualizar el estado del pedido
+                $this->processPayment($payment);
+    
+                return response()->json(['status' => 'ok'], 200); // Respuesta exitosa
             }
-
-            return response()->json(['status' => 'ok']);
+    
+            return response()->json(['status' => 'ignored'], 200); // Ignorar notificaciones no manejadas
         } catch (\Exception $e) {
-            \Log::error('Error en webhook: ' . $e->getMessage());
+            Log::error('Error en webhook: ' . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }

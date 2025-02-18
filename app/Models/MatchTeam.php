@@ -2,6 +2,7 @@
 namespace App\Models;
 
 use App\Models\DailyMatch;
+use App\Models\MatchTeamPlayer;
 use Illuminate\Database\Eloquent\Model;
 
 class MatchTeam extends Model
@@ -30,11 +31,15 @@ class MatchTeam extends Model
     }
 
    
-
-public function players()
-{
-    return $this->hasMany(MatchPlayer::class, 'equipo_partido_id', 'equipo_partido_id');
-}
+    public function players()
+    {
+        return $this->hasMany(MatchTeamPlayer::class, 'match_team_id');
+    }
+    
+//public function players()
+//{
+ //   return $this->hasMany(MatchPlayer::class, 'equipo_partido_id', 'equipo_partido_id');
+//}
 
     public function isFullyBooked()
     {
