@@ -25,7 +25,7 @@
                                 <tr>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Cancha</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Horario</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Jugadores</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Nombre del partido</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Precio</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Estado</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Fecha</th>
@@ -50,10 +50,11 @@
                                             </p>
                                         </td>
                                         <td>
-                                            <p class="text-xs font-weight-bold mb-0">
-                                                {{ $match->player_count }}/{{ $match->max_players }}
-                                            </p>
-                                        </td>
+    <p class="text-xs font-weight-bold mb-0">
+        {{ $match->name }}
+    </p>
+</td>
+
                                         <td>
                                             <p class="text-xs font-weight-bold mb-0">
                                                 ${{ number_format($match->price, 2) }}

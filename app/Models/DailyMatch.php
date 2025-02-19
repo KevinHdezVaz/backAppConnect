@@ -14,6 +14,7 @@ class DailyMatch extends Model
         'player_count',
         'partido_id',
         'max_players',
+        'game_type',   
         'field_id',
         'schedule_date',
         'start_time',

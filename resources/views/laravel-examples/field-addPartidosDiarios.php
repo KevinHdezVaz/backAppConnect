@@ -1,5 +1,6 @@
 @extends('layouts.user_type.auth')
 @section('content')
+
 <div class="container-fluid py-4">
     <div class="card">
         <div class="card-header pb-0 px-3">
@@ -7,6 +8,7 @@
         </div>
         
         <div class="card-body pt-4 p-3">
+            {{-- Mensajes de error, éxito y advertencia --}}
             @if ($errors->any())
                 <div class="alert alert-danger text-white" role="alert">
                     <ul class="mb-0">
@@ -17,11 +19,24 @@
                 </div>
             @endif
 
+            @if(session('error'))
+                <div class="alert alert-danger text-white" role="alert">
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            @if(session('warning'))
+                <div class="alert alert-warning text-white" role="alert">
+                    {{ session('warning') }}
+                </div>
+            @endif
+
             @if(session('success'))
                 <div class="alert alert-success text-white" role="alert">
                     {{ session('success') }}
                 </div>
             @endif
+
 
             <form action="{{ route('daily-matches.store') }}" method="POST">
                 @csrf
@@ -62,14 +77,17 @@
                 </div>
 
                 <div class="row mt-4">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="max_players">Máximo de Jugadores por Equipo</label>
-                            <input type="number" name="max_players" 
-                                   class="form-control @error('max_players') is-invalid @enderror"
-                                   value="{{ old('max_players', 7) }}" min="5" max="11" required>
-                        </div>
-                    </div>
+
+                  <div class="col-md-6">
+    <div class="form-group">
+        <label for="game_type">Tipo de Partido</label>
+        <select name="game_type" id="game_type" class="form-control @error('game_type') is-invalid @enderror" required>
+            <option value="">Seleccionar tipo...</option>
+            <option value="fut5">Fútbol 5</option>
+            <option value="fut7">Fútbol 7</option>
+        </select>
+    </div>
+</div>
 
                     <div class="col-md-6">
                         <div class="form-group">

@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use App\Models\Field;
 use App\Models\Booking;
-use App\Models\DailyMatch;
 use App\Models\MatchTeam;
+use App\Models\DailyMatch;
+use App\Models\DeviceToken;
 use App\Models\MatchPlayer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\NotificationEvent; // Agregar esta línea
 
 class DailyMatchController extends Controller
 {
@@ -20,7 +22,7 @@ class DailyMatchController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'field_id' => 'required|exists:fields,id',
-            'max_players' => 'required|integer|min:5|max:11',
+            'game_type' => 'required|in:fut5,fut7', 
             'price' => 'required|numeric|min:0',
             'week_selection' => 'required|in:current,next',
             'days' => 'required|array',
@@ -32,6 +34,10 @@ class DailyMatchController extends Controller
         
         try {
             // Determinar la semana seleccionada
+
+            $playersPerTeam = $request->game_type === 'fut5' ? 5 : 7;
+            $totalPlayers = $playersPerTeam ;
+
             $startOfWeek = now()->startOfWeek();
             if ($request->week_selection === 'next') {
                 $startOfWeek->addWeek();
@@ -129,7 +135,8 @@ class DailyMatchController extends Controller
                         $partido = DailyMatch::create([
                             'name' => $request->name,
                             'field_id' => $request->field_id,
-                            'max_players' => $request->max_players,
+                            'max_players' => $totalPlayers,  
+                            'game_type' => $request->game_type, 
                             'player_count' => 0,
                             'schedule_date' => $dayDate->format('Y-m-d'),
                             'start_time' => $hour,
@@ -138,21 +145,34 @@ class DailyMatchController extends Controller
                             'status' => 'open'
                         ]);
 
-                        // Crear equipos automáticamente
-                        $colores = ['Rojo', 'Azul', 'Verde', 'Amarillo', 'Blanco', 'Negro', 'Naranja'];  
-                        $emojis = ['🔴', '🔵', '🟢', '🟡', '⚪', '⚫', '🟠'];  
-                        
-                        foreach (range(1, 7) as $index) {
-                            MatchTeam::create([
-                                'equipo_partido_id' => $partido->id,
-                                'name' => "Equipo " . $index,
-                                'color' => $colores[$index - 1],
-                                'emoji' => $emojis[$index - 1],
-                                'player_count' => 0,
-                                'max_players' => ceil($request->max_players / 7)
-                            ]);
-                        }
+                         // Crear recordatorio 1 hora antes
+            $matchDateTime = Carbon::parse($dayDate->format('Y-m-d') . ' ' . $hour);
+            $reminderTime = $matchDateTime->copy()->subHour();
+            
+            NotificationEvent::create([
+                'equipo_partido_id' => $partido->id,
+                'event_type' => 'match_reminder',
+                'scheduled_at' => $reminderTime,
+            ]); 
 
+// Crear equipos automáticamente
+$colores = ['Rojo', 'Azul', 'Verde', 'Amarillo', 'Negro', 'Naranja'];  
+$emojis = ['🔴', '🔵', '🟢', '🟡', '⚫', '🟠'];  
+
+// Obtener dos índices aleatorios únicos
+$coloresAleatorios = array_rand($colores, 2);
+$numEquipos = 2;
+
+foreach (range(1, $numEquipos) as $index) {
+    MatchTeam::create([
+        'equipo_partido_id' => $partido->id,
+        'name' => "Equipo " . $index,
+        'color' => $colores[$coloresAleatorios[$index - 1]],
+        'emoji' => $emojis[$coloresAleatorios[$index - 1]], // Usamos el mismo índice para mantener la correspondencia color-emoji
+        'player_count' => 0,
+        'max_players' => $playersPerTeam // Usamos playersPerTeam para cada equipo
+    ]);
+}
                         \Log::info('Partido y equipos creados exitosamente', [
                             'id' => $partido->id,
                             'fecha' => $dayDate->format('Y-m-d'),
@@ -207,15 +227,16 @@ class DailyMatchController extends Controller
         ->with('success', 'Partido eliminado exitosamente');
 }
 
-    public function index()
-    {
-        $matches = DailyMatch::with(['field', 'teams'])
-            ->orderBy('schedule_date', 'asc')
-            ->orderBy('start_time', 'asc')
-            ->get();
-            
-        return view('laravel-examples.field-listPartidosDiarios', compact('matches'));
-    }
+public function index()
+{
+    $matches = DailyMatch::with(['field', 'teams'])
+        ->orderByDesc('schedule_date')  // Ordena por fecha de partido (recientes primero)
+        ->orderBy('start_time', 'asc')  // Dentro de la misma fecha, ordena por hora de inicio (más temprano primero)
+        ->get();
+
+    return view('laravel-examples.field-listPartidosDiarios', compact('matches'));
+}
+
 
     public function create()
     {
@@ -273,21 +294,86 @@ class DailyMatchController extends Controller
         }
 
         DB::transaction(function () use ($match, $request, $team) {
-            MatchPlayer::create([
-                'match_id' => $match->id,
-                'player_id' => $request->user()->id,
-                'equipo_partido_id' => $team->id, // Cambiado de team_id a equipo_partido_id
-                'position' => $request->position
-            ]);
-            
-            $match->increment('player_count');
-            $team->increment('player_count');
-        });
+            try {
+                \Log::info('Iniciando proceso de unión al equipo', [
+                    'match_id' => $match->id,
+                    'team_id' => $team->id,
+                    'user_id' => $request->user()->id
+                ]);
+        
+                MatchPlayer::create([
+                    'match_id' => $match->id,
+                    'player_id' => $request->user()->id,
+                    'equipo_partido_id' => $team->id,
+                    'position' => $request->position
+                ]);
+                
+                $match->increment('player_count');
+                $team->increment('player_count');
+        
+                // Obtener todos los device tokens
+                 // Enviar notificación a todos los dispositivos
+        $playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
+        ->whereNotNull('user_id')
+        ->pluck('player_id')
+        ->toArray();
 
+    \Log::info('Enviando notificación a jugadores', [
+        'total_tokens' => count($playerIds),
+        'current_user' => $request->user()->id
+    ]);
+
+    if (!empty($playerIds)) {
+        $message = "Un nuevo jugador se ha unido al {$team->name} en el partido {$match->name}";
+        $title = "Nuevo jugador en partido";
+
+        $notificationController = app(NotificationController::class);
+        $response = $notificationController->sendOneSignalNotification(
+            $playerIds,
+            $message,
+            $title
+        );
+
+        \Log::info('Respuesta de OneSignal', [
+            'response' => json_decode($response, true)
+        ]);
+    } else {
+        \Log::warning('No se encontraron dispositivos para notificar');
+    }
+} catch (\Exception $e) {
+    \Log::error('Error al enviar notificación', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ]);
+}
+        });
         return response()->json([
             'message' => 'Te has unido al equipo exitosamente'
         ]);
     }
+
+    private function sendTeamNotification($match, $title, $message)
+    {
+        $playerIds = DB::table('match_team_players')
+            ->join('users', 'match_team_players.user_id', '=', 'users.id')
+            ->join('device_tokens', 'users.id', '=', 'device_tokens.user_id')
+            ->whereIn('match_team_players.match_team_id', function($query) use ($match) {
+                $query->select('id')
+                      ->from('match_teams')
+                      ->where('equipo_partido_id', $match->id);
+            })
+            ->pluck('device_tokens.player_id')
+            ->toArray();
+    
+        if (!empty($playerIds)) {
+            app(NotificationController::class)->sendOneSignalNotification(
+                $playerIds,
+                $message,
+                $title
+            );
+        }
+    }
+
 
     public function leaveMatch(DailyMatch $match)
     {
