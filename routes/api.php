@@ -12,6 +12,7 @@ use App\Http\Controllers\DailyMatchController;
 use App\Http\Controllers\API\BookingController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\MatchPlayersController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\API\ChatMensajeController;
 use App\Http\Middleware\ValidateMercadoPagoWebhook;
@@ -55,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
    // Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']);
     Route::post('/teams/{teamId}/leave', [MatchTeamController::class, 'leaveTeam']);
 
+    Route::post('matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
      Route::get('matches/{match}/teams', [DailyMatchController::class, 'getMatchTeams']);
     Route::get('/daily-matches', [DailyMatchController::class, 'getAvailableMatches']);
     Route::post('/daily-matches/{match}/join', [DailyMatchController::class, 'joinMatch']);
@@ -100,9 +102,7 @@ Route::group(['prefix' => 'torneos'], function () {
 
 
 
- Route::post('/store-player-id', [NotificationApiController::class, 'storePlayerId']);
-
-
+  Route::post('/store-player-id', [NotificationController::class, 'storePlayerId']);
 
 Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAvailableHours'])
     ->middleware('auth:sanctum');

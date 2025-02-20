@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 use App\Models\DeviceToken;
 use App\Models\Notification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class NotificationController extends Controller
 {
@@ -46,59 +48,74 @@ class NotificationController extends Controller
             ->with('success', 'Notificación enviada exitosamente');
     }
     public function storePlayerId(Request $request)
-    {
-        try {
-            \Log::info('Recibiendo player_id request', [
-                'data' => $request->all()
-            ]);
-    
-            $request->validate([
-                'player_id' => 'required|string|max:255',
-                'user_id' => 'required|integer|exists:users,id' // Validar que el user_id exista en la tabla users
-            ]);
-    
-            // Convertir user_id a integer si es necesario
-            $userId = intval($request->user_id);
-    
-            // Verificar si el registro ya existe
-            $existingToken = DeviceToken::where('player_id', $request->player_id)->first();
-            \Log::info('Registro existente', [
-                'existing_token' => $existingToken
-            ]);
-    
-            // Si el registro ya existe, actualizar el user_id
-            if ($existingToken) {
-                $existingToken->user_id = $userId;
-                $existingToken->save();
-                $token = $existingToken;
-            } else {
-                // Si no existe, crear un nuevo registro
-                $token = DeviceToken::create([
-                    'player_id' => $request->player_id,
-                    'user_id' => $userId
-                ]);
-            }
-    
-            \Log::info('Token guardado', [
-                'token' => $token->fresh()->toArray() // Recargar el modelo para ver los datos actuales
-            ]);
-    
-            return response()->json([
-                'success' => true,
-                'message' => 'Player ID almacenado correctamente',
-                'token' => $token
-            ]);
-    
-        } catch (\Exception $e) {
-            \Log::error('Error al guardar player_id', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
+{
+    DB::beginTransaction();
+    try {
+        \Log::info('Inicio storePlayerId', [
+            'request' => $request->all()
+        ]);
 
-    
+        $playerId = $request->input('player_id');
+        $userId = (int)$request->input('user_id');
+
+        \Log::info('Datos procesados', [
+            'player_id' => $playerId,
+            'user_id' => $userId,
+            'user_id_type' => gettype($userId)
+        ]);
+
+        // Actualización directa usando Query Builder
+        $result = DB::table('device_tokens')
+            ->where('player_id', $playerId)
+            ->update([
+                'user_id' => $userId,
+                'updated_at' => now()
+            ]);
+
+        if ($result === 0) {
+            // Si no se actualizó ningún registro, insertamos uno nuevo
+            DB::table('device_tokens')->insert([
+                'player_id' => $playerId,
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+        }
+
+        // Verificar que se guardó correctamente
+        $token = DB::table('device_tokens')
+            ->where('player_id', $playerId)
+            ->first();
+
+        \Log::info('Resultado final', [
+            'token' => $token,
+            'user_id_saved' => $token->user_id ?? null
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Token guardado correctamente',
+            'data' => $token
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error en storePlayerId', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al guardar token',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+
     public function sendNotification(Request $request)
     {
         $request->validate([
@@ -112,10 +129,10 @@ class NotificationController extends Controller
             return response()->json(['error' => 'No hay dispositivos registrados'], 400);
         }
 
-        // Envía la notificación usando OneSignal
+        // Enviar la notificación usando OneSignal
         $response = $this->sendOneSignalNotification($playerIds, $request->message, $request->title);
 
-        // Guarda la notificación en el historial
+        // Guardar la notificación en el historial
         Notification::create([
             'title' => $request->title,
             'message' => $request->message,
@@ -124,25 +141,19 @@ class NotificationController extends Controller
 
         return response()->json(['message' => 'Notificación enviada', 'response' => json_decode($response)]);
     }
- 
- 
-   
 
-    private function sendOneSignalNotification($playerIds, $message, $title)
+    public function sendOneSignalNotification($playerIds, $message, $title)
     {
-        \Log::info('Preparando notificación OneSignal', [
-            'app_id' => env('ONESIGNAL_APP_ID'),
-            'has_key' => !empty(env('ONESIGNAL_REST_API_KEY')),
-            'recipients' => count($playerIds)
-        ]);
-    
         $fields = [
             'app_id' => env('ONESIGNAL_APP_ID'),
             'include_player_ids' => $playerIds,
             'contents' => ['en' => $message],
-            'headings' => ['en' => $title]
+            'headings' => ['en' => $title],
+            'small_icon' => 'ic_launcher',
+            'large_icon' => 'ic_launcher',
+            'android_group' => 'group_1'
         ];
-    
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://onesignal.com/api/v1/notifications');
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -154,23 +165,23 @@ class NotificationController extends Controller
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($fields));
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_VERBOSE, true);
-    
+
         $response = curl_exec($ch);
         $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    
-        \Log::info('Respuesta de OneSignal', [
+
+        Log::info('Respuesta de OneSignal', [
             'http_code' => $httpcode,
             'response' => json_decode($response, true),
             'request' => $fields
         ]);
-    
+
         if (curl_errno($ch)) {
             $error = curl_error($ch);
-            \Log::error('Error CURL', ['error' => $error]);
+            Log::error('Error CURL', ['error' => $error]);
             curl_close($ch);
             return json_encode(['error' => $error]);
         }
-    
+
         curl_close($ch);
         return $response;
     }

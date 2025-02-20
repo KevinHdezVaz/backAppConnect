@@ -1,21 +1,20 @@
 <?php
-
 namespace App\Models;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class DeviceToken extends Model
 {
+    protected $table = 'device_tokens';
+    
     protected $fillable = [
         'player_id',
-        'user_id', // Asegúrate de que esté aquí
+        'user_id'
     ];
 
-    // Relación con el modelo User
-    public function user()
+    // Agregamos mutador
+    public function setUserIdAttribute($value)
     {
-        return $this->belongsTo(User::class, 'user_id');
+        $this->attributes['user_id'] = (int)$value;
     }
 }

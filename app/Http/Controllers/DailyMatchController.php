@@ -311,12 +311,34 @@ public function index()
                 $match->increment('player_count');
                 $team->increment('player_count');
         
-                // Obtener todos los device tokens
-                 // Enviar notificación a todos los dispositivos
-        $playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
-        ->whereNotNull('user_id')
-        ->pluck('player_id')
-        ->toArray();
+                // Crear recordatorio para este jugador
+                $matchDateTime = Carbon::parse($match->schedule_date . ' ' . $match->start_time);
+                $reminderTime = $matchDateTime->copy()->subHour();
+
+             
+        // Crear o actualizar el recordatorio
+        NotificationEvent::updateOrCreate(
+            [
+                'equipo_partido_id' => $match->id,
+                'event_type' => 'match_reminder'
+            ],
+            [
+                'scheduled_at' => $reminderTime,
+                'is_sent' => false
+            ]
+        );
+
+        \Log::info('Recordatorio creado para el partido', [
+            'match_id' => $match->id,
+            'scheduled_at' => $reminderTime
+        ]);
+
+      // Esta parte envía la notificación inmediata a otros jugadores (NO al que se une)
+$playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
+->whereNotNull('user_id')
+->pluck('player_id')
+->toArray();
+
 
     \Log::info('Enviando notificación a jugadores', [
         'total_tokens' => count($playerIds),
@@ -374,36 +396,77 @@ public function index()
         }
     }
 
-
     public function leaveMatch(DailyMatch $match)
-    {
-        $player = MatchPlayer::where('match_id', $match->id)
-            ->where('player_id', auth()->id())
+{
+    \Log::info('Iniciando proceso de abandono de partido', [
+        'match_id' => $match->id,
+        'user_id' => auth()->id()
+    ]);
+
+    try {
+        // Buscar el jugador usando las tablas correctas
+        $playerRecord = DB::table('match_team_players')
+            ->join('match_teams', 'match_teams.id', '=', 'match_team_players.match_team_id')
+            ->where('match_teams.equipo_partido_id', $match->id)
+            ->where('match_team_players.user_id', auth()->id())
+            ->select(
+                'match_team_players.id as player_id',
+                'match_team_players.match_team_id',
+                'match_teams.equipo_partido_id'
+            )
             ->first();
 
-        if (!$player) {
+        \Log::info('Búsqueda de jugador', [
+            'player_record' => $playerRecord
+        ]);
+
+        if (!$playerRecord) {
+            \Log::warning('Jugador no encontrado en el partido');
             return response()->json([
                 'message' => 'No estás inscrito en este partido'
             ], 400);
         }
 
-        DB::transaction(function () use ($match, $player) {
-            // Obtener el equipo antes de eliminar al jugador
-            $team = MatchTeam::find($player->team_id);
-            
-            $player->delete();
-            $match->decrement('player_count');
-            
-            // Decrementar el contador del equipo si existe
-            if ($team) {
-                $team->decrement('player_count');
-            }
+        DB::transaction(function () use ($playerRecord) {
+            // 1. Eliminar el registro del jugador
+            DB::table('match_team_players')
+                ->where('id', $playerRecord->player_id)
+                ->delete();
+
+            \Log::info('Jugador eliminado de match_team_players');
+
+            // 2. Decrementar el contador del equipo
+            DB::table('match_teams')
+                ->where('id', $playerRecord->match_team_id)
+                ->decrement('player_count');
+
+            \Log::info('Counter decrementado en match_teams');
+
+            // 3. Decrementar el contador del partido
+            DB::table('equipo_partidos')
+                ->where('id', $playerRecord->equipo_partido_id)
+                ->decrement('player_count');
+
+            \Log::info('Counter decrementado en equipo_partidos');
         });
 
+        \Log::info('Proceso de abandono completado exitosamente');
+
         return response()->json([
-            'message' => 'Has abandonado el partido'
+            'message' => 'Has abandonado el partido exitosamente'
         ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error al abandonar el partido', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'message' => 'Error al abandonar el partido: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     public function getMatchPlayers(DailyMatch $match)
     {
