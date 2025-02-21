@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\User;
 use App\Models\DailyMatch;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MatchRating extends Model
 {
@@ -22,17 +23,17 @@ class MatchRating extends Model
         'rating' => 'integer'
     ];
 
-    public function match()
+    public function match(): BelongsTo
     {
         return $this->belongsTo(DailyMatch::class, 'match_id');
     }
 
-    public function ratedUser()
+    public function ratedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'rated_user_id');
     }
 
-    public function rater()
+    public function rater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'rater_user_id');
     }

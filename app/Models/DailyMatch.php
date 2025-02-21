@@ -1,9 +1,15 @@
 <?php
+
 namespace App\Models;
 
 use App\Models\MatchTeam;
 use App\Models\MatchPlayer;
+use App\Models\MatchRating;
+use App\Models\Partido;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DailyMatch extends Model
 {
@@ -31,45 +37,50 @@ class DailyMatch extends Model
     ];
 
     // Relaciones
-    public function field()
+    public function field(): BelongsTo
     {
         return $this->belongsTo(Field::class, 'field_id');
     }
 
-    public function teams()
+    public function teams(): HasMany
     {
         return $this->hasMany(MatchTeam::class, 'equipo_partido_id');
     }
 
-    public function players()
+    public function players(): HasMany
     {
         return $this->hasMany(MatchPlayer::class, 'match_id');
     }
 
-    public function partido()
+    public function ratings(): HasMany
+    {
+        return $this->hasMany(MatchRating::class, 'match_id');
+    }
+
+    public function partido(): BelongsTo
     {
         return $this->belongsTo(Partido::class, 'partido_id');
     }
 
     // Métodos de utilidad
-    public function isFullyBooked()
+    public function isFullyBooked(): bool
     {
         return $this->player_count >= $this->max_players;
     }
 
-    public function canJoin(User $user)
+    public function canJoin(User $user): bool
     {
         return !$this->isFullyBooked() && 
                !$this->players()->where('player_id', $user->id)->exists();
     }
 
-    public function getRemainingSpots()
+    public function getRemainingSpots(): int
     {
         return $this->max_players - $this->player_count;
     }
 
     // Modificadores de atributos para manejar los tiempos
-    public function setStartTimeAttribute($value)
+    public function setStartTimeAttribute($value): void
     {
         if ($value instanceof \DateTime) {
             $this->attributes['start_time'] = $value->format('H:i:s');
@@ -78,7 +89,7 @@ class DailyMatch extends Model
         }
     }
 
-    public function setEndTimeAttribute($value)
+    public function setEndTimeAttribute($value): void
     {
         if ($value instanceof \DateTime) {
             $this->attributes['end_time'] = $value->format('H:i:s');

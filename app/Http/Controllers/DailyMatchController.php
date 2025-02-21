@@ -266,10 +266,7 @@ public function index()
             ->orderBy('start_time')
             ->get();
         
-        \Log::info('Partidos encontrados:', [
-            'count' => $matches->count(),
-            'matches' => $matches->toArray()
-        ]);
+ 
         
         return response()->json([
             'matches' => $matches
@@ -410,81 +407,99 @@ $playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
     }
 
 
-
     public function getMatchesToRate()
-{
-    try {
-        $userId = auth()->id();
-
-        // Obtener partidos donde el usuario participó y que ya terminaron
-        $matches = DailyMatch::whereHas('teams.players', function($query) use ($userId) {
-            $query->where('user_id', $userId);
-        })
-        ->where('status', 'completed')
-        ->where(function($query) {
-            $query->where('schedule_date', '<', now())
-                ->orWhere(function($q) {
-                    $q->where('schedule_date', '=', now())
-                        ->where('end_time', '<', now()->format('H:i:s'));
-                });
-        })
-        // Excluir partidos que ya fueron calificados por el usuario
-        ->whereDoesntHave('ratings', function($query) use ($userId) {
-            $query->where('rater_user_id', $userId);
-        })
-        ->with(['teams.players.user', 'field'])
-        ->orderBy('schedule_date', 'desc')
-        ->orderBy('start_time', 'desc')
-        ->get();
-
-        \Log::info('Partidos por calificar encontrados', [
-            'user_id' => $userId,
-            'count' => $matches->count()
-        ]);
-
-        $matchesData = $matches->map(function($match) {
-            return [
-                'id' => $match->id,
-                'name' => $match->name,
-                'schedule_date' => $match->schedule_date,
-                'start_time' => $match->start_time,
-                'end_time' => $match->end_time,
-                'field' => [
-                    'id' => $match->field->id,
-                    'name' => $match->field->name
-                ],
-                'teams' => $match->teams->map(function($team) {
+    {
+        try {
+            $userId = auth()->id();
+            $now = now();
+            
+            \Log::info('Iniciando búsqueda de partidos para calificar', [
+                'user_id' => $userId,
+                'current_time' => $now->format('Y-m-d H:i:s')
+            ]);
+    
+            // Obtener partidos donde el usuario participó
+            $matches = DailyMatch::query()
+                ->where(function($query) use ($now) {
+                    $query->where(function($q) use ($now) {
+                        // Partidos de días anteriores
+                        $q->where('schedule_date', '<', $now->format('Y-m-d'));
+                    })->orWhere(function($q) use ($now) {
+                        // Partidos del día actual que ya terminaron
+                        $q->where('schedule_date', '=', $now->format('Y-m-d'))
+                          ->where(\DB::raw("CONCAT(schedule_date, ' ', end_time)"), '<', $now->format('Y-m-d H:i:s'));
+                    });
+                })
+                ->whereHas('teams.players', function($query) use ($userId) {
+                    $query->where('user_id', $userId);
+                })
+                // Excluir partidos que ya fueron calificados por el usuario
+                ->whereDoesntHave('ratings', function($query) use ($userId) {
+                    $query->where('rater_user_id', $userId);
+                })
+                ->with(['teams.players.user', 'field'])
+                ->get();
+    
+            \Log::info('Partidos encontrados para calificar', [
+                'user_id' => $userId,
+                'count' => $matches->count(),
+                'matches' => $matches->map(function($match) {
                     return [
-                        'id' => $team->id,
-                        'name' => $team->name,
-                        'players' => $team->players->map(function($player) {
+                        'id' => $match->id,
+                        'date' => $match->schedule_date,
+                        'end_time' => $match->end_time,
+                        'current_time' => now()->format('Y-m-d H:i:s')
+                    ];
+                })
+            ]);
+    
+            if ($matches->isEmpty()) {
+                \Log::info('No se encontraron partidos para calificar', [
+                    'user_id' => $userId
+                ]);
+            }
+    
+            return response()->json([
+                'matches' => $matches->map(function($match) {
+                    return [
+                        'id' => $match->id,
+                        'name' => $match->name,
+                        'schedule_date' => $match->schedule_date,
+                        'start_time' => $match->start_time,
+                        'end_time' => $match->end_time,
+                        'field' => [
+                            'id' => $match->field->id,
+                            'name' => $match->field->name
+                        ],
+                        'teams' => $match->teams->map(function($team) {
                             return [
-                                'id' => $player->user->id,
-                                'name' => $player->user->name,
-                                'position' => $player->position,
-                                'profile_image' => $player->user->profile_image
+                                'id' => $team->id,
+                                'name' => $team->name,
+                                'players' => $team->players->map(function($player) {
+                                    return [
+                                        'id' => $player->user->id,
+                                        'name' => $player->user->name,
+                                        'position' => $player->position,
+                                        'profile_image' => $player->user->profile_image
+                                    ];
+                                })
                             ];
                         })
                     ];
                 })
-            ];
-        });
-
-        return response()->json([
-            'matches' => $matchesData
-        ]);
-
-    } catch (\Exception $e) {
-        \Log::error('Error obteniendo partidos por calificar', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-
-        return response()->json([
-            'message' => 'Error al obtener partidos por calificar'
-        ], 500);
+            ]);
+    
+        } catch (\Exception $e) {
+            \Log::error('Error obteniendo partidos por calificar', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Error al obtener partidos por calificar',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
 public function getMatchRatings($matchId)
 {

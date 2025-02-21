@@ -14,48 +14,55 @@ class MatchRatingController extends Controller
     public function showRatingScreen($matchId)
     {
         try {
-            $match = DailyMatch::with(['teams.players.user'])->findOrFail($matchId);
+            \Log::info("Iniciando showRatingScreen para matchId: $matchId, usuario: " . auth()->id());
             
-            // Verificar que el partido haya terminado
-            $matchEndTime = \Carbon\Carbon::parse($match->schedule_date . ' ' . $match->end_time);
+            $match = DailyMatch::with(['teams.players.user'])->findOrFail($matchId);
+            \Log::info("Partido encontrado: " . $match->id);
+            
+            // Extraer solo la fecha de schedule_date y combinar con end_time
+            $dateOnly = \Carbon\Carbon::parse($match->schedule_date)->toDateString(); // Ej. '2025-02-18'
+            $matchEndTime = \Carbon\Carbon::parse($dateOnly . ' ' . $match->end_time);
+            \Log::info("Hora de fin del partido: " . $matchEndTime);
+            
             if ($matchEndTime->isFuture()) {
-                return response()->json([
-                    'message' => 'El partido aún no ha terminado'
-                ], 403);
+                return response()->json(['message' => 'El partido aún no ha terminado'], 403);
             }
-
-            // Verificar que el usuario participó
+    
+            // Verificar participación del usuario
             $userParticipated = $match->teams->flatMap->players
                 ->contains('user_id', auth()->id());
-                
+            \Log::info("Usuario participó: " . ($userParticipated ? 'Sí' : 'No'));
             if (!$userParticipated) {
-                return response()->json([
-                    'message' => 'No participaste en este partido'
-                ], 403);
+                return response()->json(['message' => 'No participaste en este partido'], 403);
             }
-
-            // Obtener el equipo del usuario
+    
+            // Obtener equipo del usuario
             $userTeam = $match->teams->first(function($team) {
                 return $team->players->contains('user_id', auth()->id());
             });
-
+            \Log::info("Equipo del usuario encontrado: " . ($userTeam ? $userTeam->id : 'Ninguno'));
+            
+            if (!$userTeam) {
+                return response()->json(['message' => 'No se encontró el equipo del usuario'], 404);
+            }
+    
             // Verificar si ya calificó
             $alreadyRated = MatchRating::where([
                 'match_id' => $matchId,
                 'rater_user_id' => auth()->id()
             ])->exists();
-
+            \Log::info("Ya calificó: " . ($alreadyRated ? 'Sí' : 'No'));
+    
             return response()->json([
                 'match' => $match,
                 'team_players' => $userTeam->players,
                 'already_rated' => $alreadyRated,
                 'can_rate' => !$alreadyRated && $matchEndTime->isPast()
             ]);
-
         } catch (\Exception $e) {
-            \Log::error('Error al mostrar pantalla de evaluación: ' . $e->getMessage());
+            \Log::error('Error al mostrar pantalla de evaluación: ' . $e->getMessage() . ' | Stack: ' . $e->getTraceAsString());
             return response()->json([
-                'message' => 'Error al cargar la pantalla de evaluación'
+                'message' => 'Error al cargar la pantalla de evaluación: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -105,7 +112,6 @@ class MatchRatingController extends Controller
             return response()->json([
                 'message' => 'Evaluaciones guardadas exitosamente'
             ]);
-
         } catch (\Exception $e) {
             \Log::error('Error al guardar evaluaciones: ' . $e->getMessage());
             return response()->json([
@@ -139,7 +145,7 @@ class MatchRatingController extends Controller
     {
         $match = DailyMatch::find($matchId);
         $totalPlayers = $match->teams->sum('player_count');
-        $requiredVotes = ceil($totalPlayers * 0.75); // 75% de los jugadores
+        $requiredVotes = ceil($totalPlayers * 0.75);
 
         $mvpVotes = DB::table('match_ratings')
             ->where('match_id', $matchId)
@@ -150,7 +156,6 @@ class MatchRatingController extends Controller
             ->first();
 
         if ($mvpVotes) {
-            // Notificar al MVP
             $playerIds = DeviceToken::where('user_id', $mvpVotes->rated_user_id)
                 ->pluck('player_id')
                 ->toArray();
@@ -180,7 +185,6 @@ class MatchRatingController extends Controller
                 'stats' => $stats,
                 'recent_ratings' => $recentRatings
             ]);
-
         } catch (\Exception $e) {
             \Log::error('Error al obtener estadísticas: ' . $e->getMessage());
             return response()->json([
