@@ -56,12 +56,12 @@ class ProcessNotifications extends Command
             }
 
         // Esta parte en ProcessNotifications.php envía el recordatorio a TODOS
-$playerIds = DB::table('match_team_players')
-->join('device_tokens', 'match_team_players.user_id', '=', 'device_tokens.user_id')
-->where('match_team_players.match_id', $notification->equipo_partido_id)
-->whereNotNull('device_tokens.user_id')
-->pluck('device_tokens.player_id')
-->toArray();
+        $playerIds = DB::table('match_team_players')
+        ->join('device_tokens', 'match_team_players.user_id', '=', 'device_tokens.user_id')
+        ->where('match_team_players.match_team_id', $notification->equipo_partido_id) // Cambia match_id por match_team_id
+        ->whereNotNull('device_tokens.user_id')
+        ->pluck('device_tokens.player_id')
+        ->toArray();
 
             $this->info('Jugadores encontrados: ' . count($playerIds));
             \Log::info('Player IDs encontrados', ['ids' => $playerIds]);

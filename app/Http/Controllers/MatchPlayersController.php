@@ -2,20 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\MatchTeam;
 use App\Models\DailyMatch;
 use App\Models\DeviceToken;
 use Illuminate\Http\Request;
 use App\Models\EquipoPartido;
 use App\Models\MatchTeamPlayer;
+use App\Models\NotificationEvent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class MatchPlayersController extends Controller
 {
-   
-
-    
     public function getTeams($matchId)
     {
         try {
@@ -116,19 +115,59 @@ class MatchPlayersController extends Controller
                 // Actualizar contador de jugadores
                 $team->increment('player_count');
     
-                // Enviar notificación
-                try {
+                // Verificar si el partido está lleno después de este jugador
+                $match = DailyMatch::find($validated['match_id']);
+                $allTeams = MatchTeam::where('equipo_partido_id', $match->id)->get();
+                
+                $allTeamsFull = $allTeams->every(function($team) {
+                    return $team->player_count >= $team->max_players;
+                });
+    
+                if ($allTeamsFull) {
+                    // Actualizar estado del partido a lleno
+                    $match->update(['status' => 'full']);
+     
+                    // Programar notificación para inicio del partido
+                    $matchStartTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date->toDateString() . ' ' . $match->start_time);
+                    NotificationEvent::create([
+                        'equipo_partido_id' => $match->id,
+                        'event_type' => 'match_start',
+                        'scheduled_at' => $matchStartTime,
+                        'message' => 'Tu partido está por comenzar'
+                    ]);
+    
+                    // Programar notificación para evaluaciones
+                    $matchEndTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date->toDateString() . ' ' . $match->end_time);
+                    NotificationEvent::create([
+                        'equipo_partido_id' => $match->id,
+                        'event_type' => 'match_rating',
+                        'scheduled_at' => $matchEndTime,
+                        'message' => '¡El partido ha terminado! Califica a tus compañeros'
+                    ]);
+    
+                    // Notificar a todos los jugadores que el partido está lleno
+                    $playerIds = DeviceToken::whereHas('user', function($query) use ($match) {
+                        $query->whereHas('matchTeamPlayers.team', function($q) use ($match) {
+                            $q->where('equipo_partido_id', $match->id);
+                        });
+                    })->pluck('player_id')->toArray();
+    
+                    if (!empty($playerIds)) {
+                        $notificationController = app(NotificationController::class);
+                        $notificationController->sendOneSignalNotification(
+                            $playerIds,
+                            "¡El partido está completo! Nos vemos en la cancha",
+                            "Partido Completo"
+                        );
+                    }
+                } else {
+                    // Enviar notificación normal de nuevo jugador
                     $playerIds = DeviceToken::whereNotNull('user_id')
                         ->where('user_id', '!=', auth()->id())
                         ->pluck('player_id')
                         ->toArray();
     
-                    \Log::info('Tokens encontrados para notificación', [
-                        'count' => count($playerIds)
-                    ]);
-    
                     if (!empty($playerIds)) {
-                        $match = DailyMatch::find($validated['match_id']);
                         $notificationController = app(NotificationController::class);
                         $response = $notificationController->sendOneSignalNotification(
                             $playerIds,
@@ -140,11 +179,6 @@ class MatchPlayersController extends Controller
                             'response' => json_decode($response, true)
                         ]);
                     }
-                } catch (\Exception $e) {
-                    \Log::error('Error enviando notificación', [
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
                 }
             });
     

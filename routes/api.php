@@ -10,6 +10,7 @@ use App\Http\Controllers\MatchTeamController;
 use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\DailyMatchController;
 use App\Http\Controllers\API\BookingController;
+use App\Http\Controllers\MatchRatingController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\MatchPlayersController;
 use App\Http\Controllers\NotificationController;
@@ -47,6 +48,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('pending', [PaymentController::class, 'pending'])->name('payments.pending');
     });
  
+
+    Route::get('matches/{match}/rating', [MatchRatingController::class, 'showRatingScreen']);
+Route::post('matches/{match}/rating', [MatchRatingController::class, 'submitRatings']);
+Route::get('players/{user}/stats', [MatchRatingController::class, 'getPlayerStats']);
+
+Route::get('matches/to-rate', [DailyMatchController::class, 'getMatchesToRate']);
+Route::get('matches/{match}/ratings', [DailyMatchController::class, 'getMatchRatings']);
+
+
+    Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
+
+
         Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
         Route::get('/matches/{matchId}/teams', [MatchPlayersController::class, 'getTeams']);
     

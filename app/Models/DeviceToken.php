@@ -17,4 +17,10 @@ class DeviceToken extends Model
     {
         $this->attributes['user_id'] = (int)$value;
     }
+
+    // Definir la relación con el modelo User
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 }

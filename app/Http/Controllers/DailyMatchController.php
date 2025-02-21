@@ -9,6 +9,7 @@ use App\Models\MatchTeam;
 use App\Models\DailyMatch;
 use App\Models\DeviceToken;
 use App\Models\MatchPlayer;
+use App\Models\MatchRating;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\NotificationEvent; // Agregar esta línea
@@ -247,21 +248,33 @@ public function index()
     public function getAvailableMatches()
     {
         \Log::info('Accediendo a getAvailableMatches');
-    
+        
+        $now = now(); // Fecha y hora actual, ej. 2025-02-21 00:25
+        $today = $now->format('Y-m-d');
+        \Log::info('Fecha y hora actual', ['now' => $now->toDateTimeString()]);
+        
         $matches = DailyMatch::with(['field', 'teams'])
-            ->where('schedule_date', '>=', now()->format('Y-m-d'))
+            ->where(function ($query) use ($now) {
+                $query->where('schedule_date', '>', $now->format('Y-m-d')) // Días futuros
+                      ->orWhere(function ($query) use ($now) {
+                          $query->where('schedule_date', $now->format('Y-m-d')) // Día actual
+                                ->where('start_time', '>=', $now->format('H:i:s')); // Partidos no iniciados
+                      });
+            })
             ->where('status', 'open')
             ->orderBy('schedule_date')
             ->orderBy('start_time')
             ->get();
-    
-        \Log::info('Partidos encontrados:', ['count' => $matches->count()]);
-    
+        
+        \Log::info('Partidos encontrados:', [
+            'count' => $matches->count(),
+            'matches' => $matches->toArray()
+        ]);
+        
         return response()->json([
             'matches' => $matches
         ]);
     }
-
     public function joinMatch(Request $request, DailyMatch $match)
     {
         $request->validate([
@@ -395,6 +408,153 @@ $playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
             );
         }
     }
+
+
+
+    public function getMatchesToRate()
+{
+    try {
+        $userId = auth()->id();
+
+        // Obtener partidos donde el usuario participó y que ya terminaron
+        $matches = DailyMatch::whereHas('teams.players', function($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })
+        ->where('status', 'completed')
+        ->where(function($query) {
+            $query->where('schedule_date', '<', now())
+                ->orWhere(function($q) {
+                    $q->where('schedule_date', '=', now())
+                        ->where('end_time', '<', now()->format('H:i:s'));
+                });
+        })
+        // Excluir partidos que ya fueron calificados por el usuario
+        ->whereDoesntHave('ratings', function($query) use ($userId) {
+            $query->where('rater_user_id', $userId);
+        })
+        ->with(['teams.players.user', 'field'])
+        ->orderBy('schedule_date', 'desc')
+        ->orderBy('start_time', 'desc')
+        ->get();
+
+        \Log::info('Partidos por calificar encontrados', [
+            'user_id' => $userId,
+            'count' => $matches->count()
+        ]);
+
+        $matchesData = $matches->map(function($match) {
+            return [
+                'id' => $match->id,
+                'name' => $match->name,
+                'schedule_date' => $match->schedule_date,
+                'start_time' => $match->start_time,
+                'end_time' => $match->end_time,
+                'field' => [
+                    'id' => $match->field->id,
+                    'name' => $match->field->name
+                ],
+                'teams' => $match->teams->map(function($team) {
+                    return [
+                        'id' => $team->id,
+                        'name' => $team->name,
+                        'players' => $team->players->map(function($player) {
+                            return [
+                                'id' => $player->user->id,
+                                'name' => $player->user->name,
+                                'position' => $player->position,
+                                'profile_image' => $player->user->profile_image
+                            ];
+                        })
+                    ];
+                })
+            ];
+        });
+
+        return response()->json([
+            'matches' => $matchesData
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error obteniendo partidos por calificar', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'message' => 'Error al obtener partidos por calificar'
+        ], 500);
+    }
+}
+
+public function getMatchRatings($matchId)
+{
+    try {
+        $userId = auth()->id();
+        $match = DailyMatch::findOrFail($matchId);
+
+        // Verificar que el usuario participó en el partido
+        $participated = $match->teams()
+            ->whereHas('players', function($query) use ($userId) {
+                $query->where('user_id', $userId);
+            })
+            ->exists();
+
+        if (!$participated) {
+            return response()->json([
+                'message' => 'No participaste en este partido'
+            ], 403);
+        }
+
+        // Obtener el equipo del usuario
+        $userTeam = $match->teams()
+            ->whereHas('players', function($query) use ($userId) {
+                $query->where('user_id', $userId);
+            })
+            ->with(['players.user'])
+            ->first();
+
+        // Verificar si ya calificó
+        $hasRated = MatchRating::where([
+            'match_id' => $matchId,
+            'rater_user_id' => $userId
+        ])->exists();
+
+        return response()->json([
+            'match' => [
+                'id' => $match->id,
+                'name' => $match->name,
+                'date' => $match->schedule_date,
+                'start_time' => $match->start_time,
+                'end_time' => $match->end_time
+            ],
+            'team' => [
+                'id' => $userTeam->id,
+                'name' => $userTeam->name,
+                'players' => $userTeam->players->map(function($player) {
+                    return [
+                        'id' => $player->user->id,
+                        'name' => $player->user->name,
+                        'position' => $player->position,
+                        'profile_image' => $player->user->profile_image
+                    ];
+                })
+            ],
+            'has_rated' => $hasRated
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error obteniendo detalles de calificación', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'message' => 'Error al obtener detalles de calificación'
+        ], 500);
+    }
+}
+
+
 
     public function leaveMatch(DailyMatch $match)
 {
