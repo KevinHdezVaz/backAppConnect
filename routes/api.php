@@ -50,11 +50,13 @@ Route::middleware('auth:sanctum')->group(function () {
  
 
     Route::get('matches/{match}/rating', [MatchRatingController::class, 'showRatingScreen']);
-Route::post('matches/{match}/rating', [MatchRatingController::class, 'submitRatings']);
-Route::get('players/{user}/stats', [MatchRatingController::class, 'getPlayerStats']);
+    Route::post('matches/{match}/rating', [MatchRatingController::class, 'submitRatings']);
+    Route::get('players/{user}/stats', [MatchRatingController::class, 'getPlayerStats']);
+    Route::get('top-mvp-players', [MatchRatingController::class, 'getTopMvpPlayers']);
 
-Route::get('matches/to-rate', [DailyMatchController::class, 'getMatchesToRate']);
-Route::get('matches/{match}/ratings', [DailyMatchController::class, 'getMatchRatings']);
+    
+    Route::get('matches/to-rate', [DailyMatchController::class, 'getMatchesToRate']);
+    Route::get('matches/{match}/ratings', [DailyMatchController::class, 'getMatchRatings']);
 
 
     Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
