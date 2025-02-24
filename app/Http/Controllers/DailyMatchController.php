@@ -11,6 +11,7 @@ use App\Models\DeviceToken;
 use App\Models\MatchPlayer;
 use App\Models\MatchRating;
 use Illuminate\Http\Request;
+use App\Services\WalletService;
 use Illuminate\Support\Facades\DB;
 use App\Models\NotificationEvent; // Agregar esta línea
 
@@ -228,6 +229,33 @@ foreach (range(1, $numEquipos) as $index) {
         ->with('success', 'Partido eliminado exitosamente');
 }
 
+public function show($id)
+{
+    $match = DailyMatch::with('field')->find($id);
+    
+    if (!$match) {
+        return response()->json(['message' => 'Partido no encontrado'], 404);
+    }
+
+    \Log::info('Mostrando partido', [
+        'id' => $id,
+        'field_id' => $match->field_id,
+        'match' => $match->toArray()
+    ]);
+
+    return response()->json([
+        'id' => $match->id,
+        'name' => $match->name,
+        'schedule_date' => $match->schedule_date->toIso8601String(),
+        'start_time' => $match->start_time,
+        'end_time' => $match->end_time,
+        'game_type' => $match->game_type,
+        'price' => $match->price,
+        'field_id' => $match->field_id,
+        'field' => $match->field
+    ]);
+}
+
 public function index()
 {
     $matches = DailyMatch::with(['field', 'teams'])
@@ -406,6 +434,26 @@ $playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
         }
     }
 
+    public function getMatchesByField($fieldId)
+{
+    $now = now();
+    
+    $matches = DailyMatch::where('field_id', $fieldId)
+        ->where(function ($query) use ($now) {
+            $query->where('schedule_date', '>', $now->format('Y-m-d'))
+                  ->orWhere(function ($q) use ($now) {
+                      $q->where('schedule_date', $now->format('Y-m-d'))
+                        ->where('start_time', '>=', $now->format('H:i:s'));
+                  });
+        })
+        ->where('status', 'open')
+        ->orderBy('schedule_date')
+        ->orderBy('start_time')
+        ->with(['teams'])
+        ->get();
+
+    return response()->json(['matches' => $matches]);
+}
 
     public function getMatchesToRate()
     {

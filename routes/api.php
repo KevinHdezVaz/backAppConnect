@@ -58,19 +58,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('matches/to-rate', [DailyMatchController::class, 'getMatchesToRate']);
     Route::get('matches/{match}/ratings', [DailyMatchController::class, 'getMatchRatings']);
 
-
-    Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
-
-
-        Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
-        Route::get('/matches/{matchId}/teams', [MatchPlayersController::class, 'getTeams']);
     
+    Route::get('/equipos', [MatchPlayersController::class, 'getPredefinedTeams']);
+    Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
+ 
+    Route::put('match-teams/{teamId}/players/{playerId}/position', [MatchPlayersController::class, 'updatePlayerPosition']);
+    Route::get('/matches/{id}', [DailyMatchController::class, 'show'])->name('matches.show');  
+    Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
+        Route::get('/matches/{matchId}/teams', [MatchPlayersController::class, 'getTeams']);
+        Route::get('match-teams/{teamId}/is-captain', [MatchPlayersController::class, 'isTeamCaptain']);
+        Route::post('match-teams/{teamId}/leave-group', [MatchPlayersController::class, 'leaveTeamAsGroup']);
+        Route::post('match-teams/register-predefined-team', [MatchPlayersController::class, 'registerPredefinedTeam']);
+
         Route::get('/payments/verify-status/{paymentId}', [PaymentController::class, 'verifyPaymentStatus']);
  
   //  Route::get('/matches/{matchId}/teams', [MatchTeamController::class, 'getTeamsForMatch']);
    // Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']);
     Route::post('/teams/{teamId}/leave', [MatchTeamController::class, 'leaveTeam']);
-
+    Route::get('/api/fields/{fieldId}/matches', [DailyMatchController::class, 'getMatchesByField']);
     Route::post('matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
      Route::get('matches/{match}/teams', [DailyMatchController::class, 'getMatchTeams']);
     Route::get('/daily-matches', [DailyMatchController::class, 'getAvailableMatches']);
@@ -78,6 +83,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/daily-matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
     Route::get('/daily-matches/{match}/players', [DailyMatchController::class, 'getMatchPlayers']);
     
+ 
+
      Route::post('equipos/{equipo}/invitar/codigo', [EquipoController::class, 'invitarPorCodigo']);
     Route::get('/equipos/buscar-usuario/{codigo}', [EquipoController::class, 'buscarUsuarioPorCodigo']);
     Route::get('/equipos', [EquipoController::class, 'index']);
@@ -126,6 +133,8 @@ Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAva
         return $request->user();
     });
 
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 

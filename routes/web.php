@@ -1,5 +1,4 @@
 <?php
-
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
@@ -27,23 +26,58 @@ Route::middleware(['guest'])->group(function () {
     Route::post('/reset-password', [ChangePasswordController::class, 'changePassword'])->name('password.update');
 });
 
+// Ruta para assetlinks.json con tu SHA-256
+Route::get('/.well-known/assetlinks.json', function () {
+    return response()->json([
+        [
+            "relation" => ["delegate_permission/common.handle_all_urls"],
+            "target" => [
+                "namespace" => "android_app",
+                "package_name" => "com.app.footconnect0",
+                "sha256_cert_fingerprints" => [
+                    "61:b5:25:c6:b5:ac:8d:f9:18:50:28:5b:70:c0:a8:ff:8b:f0:46:7e:2d:21:48:4c:3b:bf:e2:5c:55:25:d0:09"
+                ]
+            ]
+        ]
+    ]);
+});
+
  
+Route::get('/partido/{id}', function ($id) {
+    $deepLink = "miapp://partido/$id";
+    $androidFallbackUrl = "https://play.google.com/store/apps/details?id=com.app.footconnect0";
+    $iosFallbackUrl = "https://apps.apple.com/app/idTU_APPLE_ID"; // Reemplaza con tu Apple App ID cuando lo tengas
+
+    // Detectar el dispositivo del usuario
+    $userAgent = request()->header('User-Agent');
+    
+    if (str_contains($userAgent, 'Android') || str_contains($userAgent, 'iPhone') || str_contains($userAgent, 'iPad')) {
+        // Intentar redirigir al deep link
+        return redirect($deepLink);
+    } else {
+        // Si no es un dispositivo móvil, mostrar una vista con opciones
+        return view('match_preview', [
+            'matchId' => $id,
+            'androidFallbackUrl' => $androidFallbackUrl,
+            'iosFallbackUrl' => $iosFallbackUrl,
+            'deepLink' => $deepLink
+        ]);
+    }
+})->name('partido.link');
+
 // Rutas protegidas para admin
 Route::middleware(['auth:admin'])->group(function () {
- 
     Route::get('/', [HomeController::class, 'home']);
     Route::get('/dashboard', [HomeController::class, 'home'])->name('dashboard');   
 
-  
     Route::get('/stories', [StoryController::class, 'index'])->name('admin.stories.index');
     Route::get('/stories/create', [StoryController::class, 'create'])->name('admin.stories.create');
     Route::post('/stories', [StoryController::class, 'store'])->name('admin.stories.store');
     Route::delete('/stories/{story}', [StoryController::class, 'destroy'])->name('admin.stories.destroy');
 
-
     Route::get('/daily-matches', [DailyMatchController::class, 'index']);
     Route::delete('/daily-matches/{match}', [DailyMatchController::class, 'destroy'])->name('daily-matches.destroy');
-     Route::get('/daily-matches/create', [DailyMatchController::class, 'create'])->name('daily-matches.create');
+    Route::get('/daily-matches/create', [DailyMatchController::class, 'create'])->name('daily-matches.create');
     Route::post('/daily-matches', [DailyMatchController::class, 'store'])->name('daily-matches.store');
     Route::get('/daily-matches', [DailyMatchController::class, 'index'])->name('daily-matches.index');
 
@@ -67,41 +101,31 @@ Route::middleware(['auth:admin'])->group(function () {
         return view('virtual-reality');
     })->name('virtual-reality');
 
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+    Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
 
-//    Route::resource('field', FieldController::class);
+    // Torneo
+    Route::get('/tournament', [TorneoController::class, 'index'])->name('torneos.index');
+    Route::get('/tournament/create', [TorneoController::class, 'create'])->name('torneos.create');
+    Route::post('/tournament', [TorneoController::class, 'store'])->name('torneos.store');
+    Route::get('/tournament/{id}/edit', [TorneoController::class, 'edit'])->name('torneos.edit');
+    Route::put('/tournament/{id}', [TorneoController::class, 'update'])->name('torneos.update');
+    Route::delete('/tournament/{id}', [TorneoController::class, 'destroy'])->name('torneos.destroy');
+    Route::post('tournament/{id}/iniciar', [TorneoController::class, 'iniciarTorneo'])->name('torneos.iniciar');
 
+    Route::get('/user-management', [UserManagementController::class, 'index'])->name('user-management');
+    Route::get('/user-management/{id}/edit', [UserManagementController::class, 'edit'])->name('user.edit');
+    Route::put('/user-management/{id}', [UserManagementController::class, 'update'])->name('user.update');
+    Route::delete('/user-management/{id}', [UserManagementController::class, 'destroy'])->name('user.destroy');
 
-//Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
- 
-// Ruta para mostrar el historial de notificaciones
-Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
-  Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
- Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
- Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
-
- //torneo
- Route::get('/tournament', [TorneoController::class, 'index'])->name('torneos.index');
- Route::get('/tournament/create', [TorneoController::class, 'create'])->name('torneos.create');
-Route::post('/tournament', [TorneoController::class, 'store'])->name('torneos.store');
-Route::get('/tournament/{id}/edit', [TorneoController::class, 'edit'])->name('torneos.edit');
-Route::put('/tournament/{id}', [TorneoController::class, 'update'])->name('torneos.update');
-Route::delete('/tournament/{id}', [TorneoController::class, 'destroy'])->name('torneos.destroy');
-Route::post('tournament/{id}/iniciar', [TorneoController::class, 'iniciarTorneo'])->name('torneos.iniciar');
-
-Route::get('/user-management', [UserManagementController::class, 'index'])->name('user-management');
-Route::get('/user-management/{id}/edit', [UserManagementController::class, 'edit'])->name('user.edit');
-Route::put('/user-management/{id}', [UserManagementController::class, 'update'])->name('user.update');
-Route::delete('/user-management/{id}', [UserManagementController::class, 'destroy'])->name('user.destroy');
-
-
-
-Route::get('/field-management', [FieldManagementController::class, 'index'])->name('field-management');
-Route::get('/field-management/create', [FieldManagementController::class, 'create'])->name('field-management.create');
-Route::post('/field-management', [FieldManagementController::class, 'store'])->name('field-management.store');
-Route::get('/field-management/{id}/edit', [FieldManagementController::class, 'edit'])->name('field-management.edit');
-Route::put('/field-management/{id}', [FieldManagementController::class, 'update'])->name('field-management.update');
-Route::delete('/field-management/{id}', [FieldManagementController::class, 'destroy'])->name('field-management.destroy');
-
+    Route::get('/field-management', [FieldManagementController::class, 'index'])->name('field-management');
+    Route::get('/field-management/create', [FieldManagementController::class, 'create'])->name('field-management.create');
+    Route::post('/field-management', [FieldManagementController::class, 'store'])->name('field-management.store');
+    Route::get('/field-management/{id}/edit', [FieldManagementController::class, 'edit'])->name('field-management.edit');
+    Route::put('/field-management/{id}', [FieldManagementController::class, 'update'])->name('field-management.update');
+    Route::delete('/field-management/{id}', [FieldManagementController::class, 'destroy'])->name('field-management.destroy');
 
     Route::get('/logout', [SessionsController::class, 'destroy']);
     Route::get('/user-profile', [InfoUserController::class, 'create']);

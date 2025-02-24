@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -38,28 +37,3 @@ class EquipoPartido extends Model
         return $this->belongsTo(Field::class);
     }
 }
-
-class MatchTeam extends Model
-{
-    protected $table = 'match_teams';
-    
-    protected $fillable = [
-        'equipo_partido_id',
-        'name',
-        'color',
-        'emoji',
-        'player_count',
-        'max_players'
-    ];
-
-    public function equipoPartido()
-    {
-        return $this->belongsTo(EquipoPartido::class, 'equipo_partido_id');
-    }
-
-    public function players()
-    {
-        return $this->hasMany(MatchTeamPlayer::class, 'match_team_id');
-    }
-}
- 

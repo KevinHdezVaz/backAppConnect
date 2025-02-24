@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
+use App\Models\User;
+use App\Models\Field;
+use App\Models\Partido;
 use App\Models\MatchTeam;
 use App\Models\MatchPlayer;
 use App\Models\MatchRating;
-use App\Models\Partido;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -36,10 +37,11 @@ class DailyMatch extends Model
         'max_players' => 'integer'
     ];
 
-    // Relaciones
-    public function field(): BelongsTo
+  
+    
+    public function field()
     {
-        return $this->belongsTo(Field::class, 'field_id');
+        return $this->belongsTo(Field::class);
     }
 
     public function teams(): HasMany
@@ -88,7 +90,7 @@ class DailyMatch extends Model
             $this->attributes['start_time'] = date('H:i:s', strtotime($value));
         }
     }
-
+    
     public function setEndTimeAttribute($value): void
     {
         if ($value instanceof \DateTime) {

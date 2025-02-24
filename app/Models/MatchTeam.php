@@ -1,16 +1,12 @@
 <?php
 namespace App\Models;
 
-use App\Models\DailyMatch;
-use App\Models\MatchTeamPlayer;
 use Illuminate\Database\Eloquent\Model;
 
 class MatchTeam extends Model
 {
-
     protected $table = 'match_teams';
-
-
+    
     protected $fillable = [
         'equipo_partido_id',
         'name',
@@ -29,17 +25,16 @@ class MatchTeam extends Model
     {
         return $this->belongsTo(DailyMatch::class, 'equipo_partido_id');
     }
-
    
+    public function equipoPartido()
+    {
+        return $this->belongsTo(EquipoPartido::class, 'equipo_partido_id');
+    }
+
     public function players()
     {
         return $this->hasMany(MatchTeamPlayer::class, 'match_team_id');
     }
-    
-//public function players()
-//{
- //   return $this->hasMany(MatchPlayer::class, 'equipo_partido_id', 'equipo_partido_id');
-//}
 
     public function isFullyBooked()
     {
