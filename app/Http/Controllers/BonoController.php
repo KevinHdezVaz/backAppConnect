@@ -90,61 +90,86 @@ class BonoController extends Controller
      * Comprar un bono
      */
     public function comprar(Request $request)
-{
-    $validated = $request->validate([
-        'bono_id' => 'required|exists:bonos,id',
-        'payment_id' => 'required|string',
-        'order_id' => 'required|exists:orders,id',
-    ]);
-
-    try {
-        $order = Order::findOrFail($validated['order_id']);
-        if ($order->type !== 'bono' || $order->reference_id != $validated['bono_id']) {
-            return response()->json(['message' => 'Orden inválida para este bono'], 422);
-        }
-
-        if ($order->payment_id !== $validated['payment_id'] || $order->status !== 'completed') {
-            $paymentInfo = $this->mercadoPagoService->getPaymentInfo($validated['payment_id']);
-            if ($paymentInfo['status'] !== 'approved') {
-                return response()->json(['message' => 'El pago aún no ha sido aprobado'], 422);
-            }
-            $order->update([
-                'payment_id' => $validated['payment_id'],
-                'status' => 'completed',
-                'payment_details' => array_merge($order->payment_details, ['payment_info' => $paymentInfo]),
-            ]);
-        }
-
-        $bono = Bono::findOrFail($validated['bono_id']);
-        $fechaCompra = now();
-        $fechaVencimiento = $fechaCompra->copy()->addDays($bono->duracion_dias);
-
-        $codigoReferencia = strtoupper(Str::random(8));
-        while (UserBono::where('codigo_referencia', $codigoReferencia)->exists()) {
-            $codigoReferencia = strtoupper(Str::random(8));
-        }
-
-        $userBono = UserBono::create([
-            'user_id' => auth()->id(),
-            'bono_id' => $bono->id,
-            'fecha_compra' => $fechaCompra,
-            'fecha_vencimiento' => $fechaVencimiento,
-            'codigo_referencia' => $codigoReferencia,
-            'payment_id' => $validated['payment_id'],
-            'estado' => 'activo',
-            'usos_disponibles' => $bono->usos_totales ?? null,
-            'usos_totales' => $bono->usos_totales ?? null,
+    {
+        $validated = $request->validate([
+            'bono_id' => 'required|exists:bonos,id',
+            'payment_id' => 'required|string',
+            'order_id' => 'required|exists:orders,id',
         ]);
-
-        return response()->json([
-            'message' => 'Bono comprado exitosamente',
-            'user_bono' => $userBono->load('bono')
-        ], 201);
-    } catch (\Exception $e) {
-        Log::error('Error al comprar bono: ' . $e->getMessage());
-        return response()->json(['message' => 'Error al procesar la compra del bono'], 500);
+    
+        try {
+            return \DB::transaction(function() use ($validated, $request) {
+                // Verificar si ya existe un UserBono con este pago
+                $existingUserBono = UserBono::where('payment_id', $validated['payment_id'])->first();
+                if ($existingUserBono) {
+                    return response()->json([
+                        'message' => 'Este pago ya ha sido procesado anteriormente',
+                        'user_bono' => $existingUserBono->load('bono')
+                    ], 200);
+                }
+    
+                // Verificar si ya existe un bono activo del mismo tipo
+                $existingActiveBonoByType = UserBono::where('user_id', auth()->id())
+                    ->where('bono_id', $validated['bono_id'])
+                    ->where('estado', 'activo')
+                    ->where('fecha_vencimiento', '>', now())
+                    ->first();
+                    
+                if ($existingActiveBonoByType) {
+                    return response()->json([
+                        'message' => 'Ya tienes un bono activo de este tipo',
+                        'user_bono' => $existingActiveBonoByType->load('bono')
+                    ], 200);
+                }
+    
+                $order = Order::findOrFail($validated['order_id']);
+                if ($order->type !== 'bono' || $order->reference_id != $validated['bono_id']) {
+                    return response()->json(['message' => 'Orden inválida para este bono'], 422);
+                }
+    
+                if ($order->payment_id !== $validated['payment_id'] || $order->status !== 'completed') {
+                    $paymentInfo = $this->mercadoPagoService->getPaymentInfo($validated['payment_id']);
+                    if ($paymentInfo['status'] !== 'approved') {
+                        return response()->json(['message' => 'El pago aún no ha sido aprobado'], 422);
+                    }
+                    $order->update([
+                        'payment_id' => $validated['payment_id'],
+                        'status' => 'completed',
+                        'payment_details' => array_merge($order->payment_details ?? [], ['payment_info' => $paymentInfo]),
+                    ]);
+                }
+    
+                $bono = Bono::findOrFail($validated['bono_id']);
+                $fechaCompra = now();
+                $fechaVencimiento = $fechaCompra->copy()->addDays($bono->duracion_dias);
+    
+                $codigoReferencia = strtoupper(Str::random(8));
+                while (UserBono::where('codigo_referencia', $codigoReferencia)->exists()) {
+                    $codigoReferencia = strtoupper(Str::random(8));
+                }
+    
+                $userBono = UserBono::create([
+                    'user_id' => auth()->id(),
+                    'bono_id' => $bono->id,
+                    'fecha_compra' => $fechaCompra,
+                    'fecha_vencimiento' => $fechaVencimiento,
+                    'codigo_referencia' => $codigoReferencia,
+                    'payment_id' => $validated['payment_id'],
+                    'estado' => 'activo',
+                    'usos_disponibles' => $bono->usos_totales ?? null,
+                    'usos_totales' => $bono->usos_totales ?? null,
+                ]);
+    
+                return response()->json([
+                    'message' => 'Bono comprado exitosamente',
+                    'user_bono' => $userBono->load('bono')
+                ], 201);
+            });
+        } catch (\Exception $e) {
+            Log::error('Error al comprar bono: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al procesar la compra del bono'], 500);
+        }
     }
-}
 
     /**
      * Obtener los bonos activos del usuario autenticado

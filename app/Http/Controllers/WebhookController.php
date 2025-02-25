@@ -294,13 +294,12 @@ class WebhookController extends Controller
             'message' => 'New booking created'
         ]);
     }
-
     private function processBono(Order $order, $paymentInfo)
     {
-        // Verificar si ya existe un UserBono con este payment_id
+        // Primero verificar si ya existe un bono con este pago
         $existingUserBono = UserBono::where('payment_id', $paymentInfo['id'])->first();
         if ($existingUserBono) {
-            Log::info('UserBono already exists:', ['user_bono_id' => $existingUserBono->id]);
+            Log::info('UserBono already exists with payment_id:', ['payment_id' => $paymentInfo['id']]);
             return response()->json([
                 'status' => 'success',
                 'user_bono_id' => $existingUserBono->id,
@@ -308,20 +307,22 @@ class WebhookController extends Controller
             ]);
         }
     
-        // Verificar si la orden ya tiene un UserBono asociado (por referencia_id y user_id)
-        $existingUserBonoByOrder = UserBono::where('bono_id', $order->reference_id)
-            ->where('user_id', $order->user_id)
+        // Segundo, verificar si ya existe un bono activo del mismo tipo para este usuario
+        $existingBonoByType = UserBono::where('user_id', $order->user_id)
+            ->where('bono_id', $order->reference_id)
+            ->where('estado', 'activo')
+            ->where('fecha_vencimiento', '>', now())
             ->first();
-        if ($existingUserBonoByOrder) {
-            Log::warning('UserBono already exists for this order and user:', [
-                'user_bono_id' => $existingUserBonoByOrder->id,
-                'bono_id' => $order->reference_id,
-                'user_id' => $order->user_id
+            
+        if ($existingBonoByType) {
+            Log::info('Active UserBono already exists for this user and bono_id:', [
+                'user_id' => $order->user_id,
+                'bono_id' => $order->reference_id
             ]);
             return response()->json([
                 'status' => 'success',
-                'user_bono_id' => $existingUserBonoByOrder->id,
-                'message' => 'UserBono already exists for this order'
+                'user_bono_id' => $existingBonoByType->id,
+                'message' => 'Active UserBono already exists'
             ]);
         }
     
