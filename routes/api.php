@@ -1,7 +1,9 @@
 <?php
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BonoController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WebhookController;
@@ -23,6 +25,7 @@ use App\Http\Controllers\API\NotificationApiController;
 // Ruta para crear la preferencia de pago
 Route::post('/payments/create-preference', [MercadoPagoController::class, 'createPreference'])
     ->middleware('auth:sanctum');
+    
 
 // Rutas para los callbacks de MP
 Route::get('/payments/success', [MercadoPagoController::class, 'handleSuccess']);
@@ -40,6 +43,22 @@ Route::post('webhook/mercadopago', [WebhookController::class, 'handleMercadoPago
 
  //ruta para equipo
 Route::middleware('auth:sanctum')->group(function () {
+
+    Route::get('/orders/{id}', function ($id) {
+        $order = Order::findOrFail($id);
+        return response()->json($order);
+    });
+
+    Route::get('/bonos', [BonoController::class, 'index']);
+    Route::get('/bonos/{bono}', [BonoController::class, 'show']);
+    Route::post('/bonos/create-preference', [BonoController::class, 'createPreference']); // Nueva ruta
+    Route::post('/bonos/comprar', [BonoController::class, 'comprar']);
+    Route::get('/mis-bonos', [BonoController::class, 'misBonos']);
+    Route::get('/historial-bonos', [BonoController::class, 'historialBonos']);
+    Route::post('/bonos/usar', [BonoController::class, 'usarBono']);
+    Route::put('/bonos/cancelar/{userBono}', [BonoController::class, 'cancelarBono']);
+    Route::post('/bonos/verificar-codigo', [BonoController::class, 'verificarCodigo']);
+
 
     Route::prefix('payments')->group(function () {
         Route::post('create-preference', [PaymentController::class, 'createPreference']);

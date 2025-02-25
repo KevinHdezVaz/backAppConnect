@@ -19,48 +19,36 @@ class PaymentController extends Controller
     public function verifyPaymentStatus($paymentId)
     {
         try {
-            // Obtener información del pago desde MercadoPago usando el servicio
             $paymentInfo = $this->mercadoPagoService->validatePaymentStatus($paymentId);
-
-            // Devolver el estado del pago
             return response()->json([
                 'status' => $paymentInfo['status'],
                 'is_approved' => $paymentInfo['is_approved'],
             ]);
         } catch (\Exception $e) {
             Log::error('Error al verificar el estado del pago: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Error al verificar el estado del pago',
-            ], 500);
+            return response()->json(['error' => 'Error al verificar el estado del pago'], 500);
         }
     }
-
+    
     public function createPreference(Request $request)
     {
         try {
-            Log::info('Creando preferencia de pago', $request->all());
-
-            // Validar la request
             $request->validate([
                 'items' => 'required|array',
                 'items.*.title' => 'required|string',
                 'items.*.quantity' => 'required|integer',
                 'items.*.unit_price' => 'required|numeric',
+                'type' => 'required|in:booking,bono', // Tipos permitidos
+                'reference_id' => 'required|integer', // ID del recurso (field_id o bono_id)
             ]);
 
-            // Crear orden en la base de datos
             $order = Order::create([
                 'user_id' => auth()->id(),
-                'total' => collect($request->items)->sum(function ($item) {
-                    return $item['quantity'] * $item['unit_price'];
-                }),
+                'total' => collect($request->items)->sum(fn($item) => $item['quantity'] * $item['unit_price']),
                 'status' => 'pending',
-                'payment_details' => [
-                    'field_id' => $request->additionalData['field_id'] ?? null,
-                    'date' => $request->additionalData['date'] ?? null,
-                    'start_time' => $request->additionalData['start_time'] ?? null,
-                    'players_needed' => $request->additionalData['players_needed'] ?? null,
-                ],
+                'type' => $request->type,
+                'reference_id' => $request->reference_id,
+                'payment_details' => $request->additionalData ?? [], // Solo datos adicionales
             ]);
 
             $preferenceData = [
@@ -73,41 +61,26 @@ class PaymentController extends Controller
                 'auto_return' => 'approved',
                 'external_reference' => (string) $order->id,
                 'notification_url' => 'https://proyect.aftconta.mx/api/webhook/mercadopago',
+                'payer' => [
+                    'name' => auth()->user()->name,
+                    'email' => auth()->user()->email,
+                ],
             ];
 
-            if (isset($request->payer)) {
-                $preferenceData['payer'] = [
-                    'name' => $request->payer['name'],
-                    'email' => $request->payer['email'],
-                ];
-            }
-
-            // Crear preferencia en MercadoPago
             $preference = $this->mercadoPagoService->createPreference($preferenceData);
 
-            // Actualizar orden con información de la preferencia
-            $order->update([
-                'payment_details' => array_merge(
-                    $order->payment_details,
-                    ['preference_id' => $preference['id'] ?? null]
-                ),
-            ]);
+            $order->update(['preference_id' => $preference['id']]);
 
             return response()->json([
                 'init_point' => $preference['init_point'],
                 'order_id' => $order->id,
             ]);
         } catch (\Exception $e) {
-            Log::error('Error al crear preferencia', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'error' => 'Error al procesar el pago: ' . $e->getMessage(),
-            ], 500);
+            Log::error('Error al crear preferencia', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Error al procesar el pago'], 500);
         }
     }
+
 
     public function handleSuccess(Request $request)
     {
