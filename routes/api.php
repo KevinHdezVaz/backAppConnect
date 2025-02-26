@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json($order);
     });
 
+Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
     Route::get('/bonos', [BonoController::class, 'index']);
     Route::get('/bonos/{bono}', [BonoController::class, 'show']);
     Route::post('/bonos/create-preference', [BonoController::class, 'createPreference']); // Nueva ruta
@@ -88,6 +89,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('match-teams/{teamId}/is-captain', [MatchPlayersController::class, 'isTeamCaptain']);
         Route::post('match-teams/{teamId}/leave-group', [MatchPlayersController::class, 'leaveTeamAsGroup']);
         Route::post('match-teams/register-predefined-team', [MatchPlayersController::class, 'registerPredefinedTeam']);
+        Route::post('match-teams/{teamId}/finalize', [MatchPlayersController::class, 'finalizeTeamRegistration']);
+
+
 
         Route::get('/payments/verify-status/{paymentId}', [PaymentController::class, 'verifyPaymentStatus']);
  

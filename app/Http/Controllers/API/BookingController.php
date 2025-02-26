@@ -132,7 +132,8 @@ public function getAvailableHours(Field $field, Request $request)
         'available_hours' => $availableHours,
     ]);
 
-    return response()->json($availableHours); // Devuelve solo el array de horas
+     return response()->json(array_values($availableHours));
+
 }
 
 

@@ -14,7 +14,7 @@ class FieldController extends Controller
     {
         return response()->json(Field::all());
     }
-
+ 
     public function show(Field $field) {
         return $field;
     }

@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
+use App\Models\Bono;
 use App\Models\Order;
 use App\Models\Booking;
 use App\Models\UserBono;
-use Carbon\Carbon;
-use App\Services\MercadoPagoService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
+use App\Models\MatchTeam;
+use App\Models\DeviceToken;
 use Illuminate\Support\Str;
+use Illuminate\Http\Request;
+use App\Models\EquipoPartido;
+use App\Models\MatchTeamPlayer;
+use App\Models\NotificationEvent;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Services\MercadoPagoService;
+use Illuminate\Support\Facades\Http;
 
 class WebhookController extends Controller
 {
@@ -42,7 +49,7 @@ class WebhookController extends Controller
     
             // Verificar si ya procesamos esta notificación (por id)
             if (isset($data['id'])) {
-                 $existingLog = false; // Por ahora simplemente deshabilitamos la verificación de duplicados
+                $existingLog = false; // Por ahora simplemente deshabilitamos la verificación de duplicados
 
                 if ($existingLog) {
                     Log::info('Notificación duplicada ignorada:', ['id' => $data['id']]);
@@ -72,7 +79,7 @@ class WebhookController extends Controller
         }
     }
     
-    private function processPayment($paymentInfo)
+    public function handlePayment($paymentInfo)
     {
         try {
             Log::info('Processing payment:', $paymentInfo);
@@ -148,7 +155,7 @@ class WebhookController extends Controller
         try {
             $paymentId = $request->data['id'];
             Log::info('Processing payment notification:', ['payment_id' => $paymentId]);
-            return $this->processPayment($this->mercadoPagoService->getPaymentInfo($paymentId));
+            return $this->handlePayment($this->mercadoPagoService->getPaymentInfo($paymentId));
         } catch (\Exception $e) {
             Log::error('Error in payment notification:', [
                 'error' => $e->getMessage(),
@@ -162,7 +169,7 @@ class WebhookController extends Controller
     {
         try {
             Log::info('Processing payment notification (topic: payment):', ['payment_id' => $paymentId]);
-            return $this->processPayment($this->mercadoPagoService->getPaymentInfo($paymentId));
+            return $this->handlePayment($this->mercadoPagoService->getPaymentInfo($paymentId));
         } catch (\Exception $e) {
             Log::error('Error in payment notification (topic: payment):', [
                 'error' => $e->getMessage(),
@@ -194,7 +201,7 @@ class WebhookController extends Controller
                 foreach ($orderData['payments'] as $payment) {
                     if ($payment['status'] === 'approved') {
                         $paymentInfo = $this->mercadoPagoService->getPaymentInfo($payment['id']);
-                        $results[] = $this->processPayment($paymentInfo);
+                        $results[] = $this->handlePayment($paymentInfo);
                     }
                 }
             }
@@ -211,33 +218,44 @@ class WebhookController extends Controller
             throw $e;
         }
     }
- 
 
     private function handleApprovedPayment(Order $order, $paymentInfo)
     {
         try {
-            if ($order->status === 'completed') {
-                Log::info('Order already completed:', ['order_id' => $order->id]);
-                return response()->json([
-                    'status' => 'already_completed',
-                    'message' => 'Order already processed'
+            Log::info('Procesando orden:', ['order_id' => $order->id, 'type' => $order->type]);
+            
+            if ($order->status !== 'completed') {
+                $order->update([
+                    'status' => 'completed',
+                    'payment_id' => $paymentInfo['id'],
+                    'payment_details' => array_merge(
+                        $order->payment_details ?? [],
+                        ['payment_info' => $paymentInfo]
+                    )
                 ]);
+                
+                Log::info('Orden actualizada a estado completed', ['order_id' => $order->id]);
+            } else {
+                if (!isset($order->payment_details['payment_info']) || $order->payment_id !== $paymentInfo['id']) {
+                    $order->update([
+                        'payment_id' => $paymentInfo['id'],
+                        'payment_details' => array_merge(
+                            $order->payment_details ?? [],
+                            ['payment_info' => $paymentInfo]
+                        )
+                    ]);
+                    
+                    Log::info('Payment info actualizado para orden completada', ['order_id' => $order->id]);
+                }
             }
-
-            $order->update([
-                'status' => 'completed',
-                'payment_id' => $paymentInfo['id'],
-                'payment_details' => array_merge(
-                    $order->payment_details ?? [],
-                    ['payment_info' => $paymentInfo]
-                )
-            ]);
-
+    
             switch ($order->type) {
                 case 'booking':
                     return $this->processBooking($order, $paymentInfo);
                 case 'bono':
                     return $this->processBono($order, $paymentInfo);
+                case 'match':
+                    return $this->processMatch($order, $paymentInfo);
                 default:
                     Log::warning('Unhandled order type:', ['type' => $order->type]);
                     return response()->json(['error' => 'Unknown order type'], 400);
@@ -247,6 +265,254 @@ class WebhookController extends Controller
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'order_id' => $order->id
+            ]);
+            throw $e;
+        }
+    }
+
+    private function processMatch(Order $order, $paymentInfo)
+    {
+        try {
+            Log::info('Procesando pago para unirse a partido', [
+                'order_id' => $order->id,
+                'payment_details' => $order->payment_details,
+                'user_id' => $order->user_id
+            ]);
+            
+            $details = $order->payment_details;
+            
+            $teamId = null;
+            $position = null;
+            $matchId = $order->reference_id;
+            
+            if (isset($details['team_id'])) {
+                $teamId = $details['team_id'];
+            }
+            
+            if (isset($details['position'])) {
+                $position = $details['position'];
+            }
+            
+            Log::info('Datos extraídos:', [
+                'teamId' => $teamId,
+                'position' => $position,
+                'matchId' => $matchId
+            ]);
+            
+            if (!$teamId || !$position) {
+                throw new \Exception('Faltan datos para procesar la unión al partido');
+            }
+            
+            $team = MatchTeam::find($teamId);
+            if (!$team) {
+                throw new \Exception('El equipo no existe: ' . $teamId);
+            }
+            
+            Log::info('Equipo encontrado:', [
+                'team_id' => $team->id,
+                'name' => $team->name,
+                'player_count' => $team->player_count,
+                'max_players' => $team->max_players
+            ]);
+            
+            if ($team->player_count >= $team->max_players) {
+                throw new \Exception('El equipo está lleno');
+            }
+            
+            $existingPlayer = MatchTeamPlayer::whereHas('team', function($query) use ($matchId) {
+                $query->where('equipo_partido_id', $matchId);
+            })->where('user_id', $order->user_id)->first();
+            
+            if ($existingPlayer) {
+                Log::info('Usuario ya está en un equipo de este partido', [
+                    'user_id' => $order->user_id,
+                    'match_id' => $matchId,
+                    'existing_player' => $existingPlayer->id
+                ]);
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Usuario ya registrado en este partido'
+                ]);
+            }
+            
+            Log::info('Creando registro de jugador:', [
+                'user_id' => $order->user_id,
+                'team_id' => $teamId,
+                'position' => $position
+            ]);
+            
+            DB::beginTransaction();
+            try {
+                $player = MatchTeamPlayer::create([
+                    'match_team_id' => $teamId,
+                    'user_id' => $order->user_id,
+                    'position' => $position,
+                ]);
+                
+                Log::info('Jugador creado:', [
+                    'player_id' => $player->id,
+                    'match_team_id' => $player->match_team_id,
+                    'user_id' => $player->user_id,
+                    'position' => $player->position
+                ]);
+                
+                $team->player_count = $team->player_count + 1;
+                $team->save();
+                
+                Log::info('Contador de jugadores actualizado:', [
+                    'team_id' => $team->id,
+                    'new_player_count' => $team->player_count
+                ]);
+                
+                if ($order->status !== 'completed') {
+                    $order->status = 'completed';
+                    $order->payment_id = $paymentInfo['id'];
+                    $order->save();
+                    
+                    Log::info('Orden actualizada a completed:', [
+                        'order_id' => $order->id
+                    ]);
+                }
+                
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollback();
+                Log::error('Error al crear jugador en la base de datos:', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e;
+            }
+            
+            $match = EquipoPartido::find($matchId);
+            $allTeams = MatchTeam::where('equipo_partido_id', $matchId)->get();
+            
+            Log::info('Verificando si el partido está lleno:', [
+                'match_id' => $matchId,
+                'teams_count' => $allTeams->count()
+            ]);
+            
+            $allTeamsFull = true;
+            foreach ($allTeams as $t) {
+                Log::info('Estado del equipo:', [
+                    'team_id' => $t->id,
+                    'player_count' => $t->player_count,
+                    'max_players' => $t->max_players,
+                    'is_full' => $t->player_count >= $t->max_players
+                ]);
+                
+                if ($t->player_count < $t->max_players) {
+                    $allTeamsFull = false;
+                    break;
+                }
+            }
+            
+            if ($allTeamsFull) {
+                $match->update(['status' => 'full']);
+                
+                Log::info('Partido marcado como lleno:', [
+                    'match_id' => $matchId
+                ]);
+                
+                try {
+                    $matchStartTime = Carbon::parse("{$match->schedule_date} {$match->start_time}");
+                    NotificationEvent::create([
+                        'equipo_partido_id' => $match->id,
+                        'event_type' => 'match_start',
+                        'scheduled_at' => $matchStartTime,
+                        'message' => 'Tu partido está por comenzar'
+                    ]);
+                    
+                    $matchEndTime = Carbon::parse("{$match->schedule_date} {$match->end_time}");
+                   NotificationEvent::create([
+                        'equipo_partido_id' => $match->id,
+                        'event_type' => 'match_rating',
+                        'scheduled_at' => $matchEndTime,
+                        'message' => '¡El partido ha terminado! Califica a tus compañeros'
+                    ]);
+                    
+                    Log::info('Notificaciones programadas para el partido:', [
+                        'match_id' => $matchId,
+                        'start_time' => $matchStartTime,
+                        'end_time' => $matchEndTime
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Error al programar notificaciones:', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+                
+                try {
+                    $playerIds = DeviceToken::whereHas('user', function($q) use ($match) {
+                        $q->whereHas('matchTeamPlayers.team', function($q) use ($match) {
+                            $q->where('equipo_partido_id', $match->id);
+                        });
+                    })->pluck('player_id')->toArray();
+                    
+                    if (!empty($playerIds)) {
+                        $notificationController = app(\App\Http\Controllers\NotificationController::class);
+                        $notificationController->sendOneSignalNotification(
+                            $playerIds,
+                            "¡El partido está completo! Nos vemos en la cancha",
+                            "Partido Completo"
+                        );
+                        
+                        Log::info('Notificación enviada a jugadores:', [
+                            'player_ids_count' => count($playerIds)
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error al enviar notificaciones:', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            } else {
+                try {
+                    $playerIds = DeviceToken::whereNotNull('user_id')
+                        ->where('user_id', '!=', $order->user_id)
+                        ->pluck('player_id')
+                        ->toArray();
+                    
+                    if (!empty($playerIds)) {
+                        $user = User::find($order->user_id);
+                        $userName = $user ? $user->name : 'Un nuevo jugador';
+                        
+                        $notificationController = app(\App\Http\Controllers\NotificationController::class);
+                        $notificationController->sendOneSignalNotification(
+                            $playerIds,
+                            "$userName se ha unido al {$team->name} en el partido {$match->name}",
+                            "Nuevo jugador en partido"
+                        );
+                        
+                        Log::info('Notificación enviada sobre nuevo jugador:', [
+                            'player_ids_count' => count($playerIds),
+                            'user_name' => $userName
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error al enviar notificación de nuevo jugador:', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+            
+            Log::info('Usuario unido exitosamente al partido', [
+                'user_id' => $order->user_id,
+                'team_id' => $teamId,
+                'position' => $position,
+                'player_id' => $player->id
+            ]);
+            
+            return response()->json([
+                'status' => 'success',
+                'player_id' => $player->id,
+                'message' => 'Usuario unido exitosamente al partido'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error procesando pago para unirse a partido', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             throw $e;
         }
@@ -294,9 +560,9 @@ class WebhookController extends Controller
             'message' => 'New booking created'
         ]);
     }
+
     private function processBono(Order $order, $paymentInfo)
     {
-        // Primero verificar si ya existe un bono con este pago
         $existingUserBono = UserBono::where('payment_id', $paymentInfo['id'])->first();
         if ($existingUserBono) {
             Log::info('UserBono already exists with payment_id:', ['payment_id' => $paymentInfo['id']]);
@@ -307,7 +573,6 @@ class WebhookController extends Controller
             ]);
         }
     
-        // Segundo, verificar si ya existe un bono activo del mismo tipo para este usuario
         $existingBonoByType = UserBono::where('user_id', $order->user_id)
             ->where('bono_id', $order->reference_id)
             ->where('estado', 'activo')
@@ -326,8 +591,7 @@ class WebhookController extends Controller
             ]);
         }
     
-        // Crear nuevo UserBono
-        $bono = \App\Models\Bono::findOrFail($order->reference_id);
+        $bono = Bono::findOrFail($order->reference_id);
         $fechaCompra = now();
         $fechaVencimiento = $fechaCompra->copy()->addDays($bono->duracion_dias);
     

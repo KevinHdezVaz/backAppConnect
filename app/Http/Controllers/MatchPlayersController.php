@@ -72,6 +72,8 @@ class MatchPlayersController extends Controller
             ], 500);
         }
     }
+  
+
     public function registerPredefinedTeam(Request $request)
     {
         try {
@@ -91,7 +93,6 @@ class MatchPlayersController extends Controller
             $predefinedTeam = Equipo::findOrFail($validated['predefined_team_id']);
             $user = auth()->user();
     
-            // Verificar que el usuario sea el capitán del equipo
             if (!$predefinedTeam->esCapitan($user)) {
                 return response()->json(['message' => 'Solo el capitán puede inscribir al equipo'], 403);
             }
@@ -102,7 +103,6 @@ class MatchPlayersController extends Controller
             }
     
             return DB::transaction(function () use ($match, $predefinedTeam, $activeMembers, $validated) {
-                // Verificar que el equipo destino esté disponible
                 $targetTeam = MatchTeam::where('id', $validated['target_team_id'])
                     ->where('equipo_partido_id', $match->id)
                     ->where('player_count', 0)
@@ -112,85 +112,30 @@ class MatchPlayersController extends Controller
                     return response()->json(['message' => 'El equipo seleccionado no está disponible'], 400);
                 }
     
-                // Verificar compatibilidad de tamaño
                 if ($activeMembers->count() > $targetTeam->max_players) {
                     return response()->json(['message' => 'El equipo excede el límite de jugadores del partido'], 400);
                 }
     
-                // Registrar los miembros del equipo predefinido en el MatchTeam
+                // Registrar los miembros del equipo predefinido
                 foreach ($activeMembers as $member) {
                     MatchTeamPlayer::create([
                         'match_team_id' => $targetTeam->id,
                         'user_id' => $member->id,
-                        'position' => $member->pivot->posicion ?? 'Sin posición',
+                        'position' => $member->pivot->posicion ?? 'Sin posición', // Posición inicial
                     ]);
                 }
     
-                // Actualizar el contador y datos del equipo
+                // Actualizar el equipo pero mantener estado pendiente
                 $targetTeam->player_count = $activeMembers->count();
                 $targetTeam->name = $predefinedTeam->nombre;
                 $targetTeam->color = $predefinedTeam->color_uniforme;
+                $targetTeam->status = 'pending_positions'; // Nuevo estado para indicar que faltan posiciones
                 $targetTeam->save();
     
-                // Verificar si el partido está lleno
-                $allTeams = MatchTeam::where('equipo_partido_id', $match->id)->get();
-                $allTeamsFull = $allTeams->every(fn($t) => $t->player_count >= $t->max_players);
-    
-                if ($allTeamsFull) {
-                    $match->status = 'full';
-                    $match->save();
-    
-                    // Programar notificaciones
-                    $matchStartTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->start_time);
-                    NotificationEvent::create([
-                        'equipo_partido_id' => $match->id,
-                        'event_type' => 'match_start',
-                        'scheduled_at' => $matchStartTime,
-                        'message' => 'Tu partido está por comenzar'
-                    ]);
-    
-                    $matchEndTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->end_time);
-                    NotificationEvent::create([
-                        'equipo_partido_id' => $match->id,
-                        'event_type' => 'match_rating',
-                        'scheduled_at' => $matchEndTime,
-                        'message' => '¡El partido ha terminado! Califica a tus compañeros'
-                    ]);
-    
-                    // Notificar a todos los jugadores
-                    $playerIds = DeviceToken::whereHas('user', function($q) use ($match) {
-                        $q->whereHas('matchTeamPlayers.team', function($q) use ($match) {
-                            $q->where('equipo_partido_id', $match->id);
-                        });
-                    })->pluck('player_id')->toArray();
-    
-                    if (!empty($playerIds)) {
-                        $notificationController = app(NotificationController::class);
-                        $notificationController->sendOneSignalNotification(
-                            $playerIds,
-                            "¡El partido está completo! Nos vemos en la cancha",
-                            "Partido Completo"
-                        );
-                    }
-                } else {
-                    // Notificar que un equipo se ha inscrito
-                    $playerIds = DeviceToken::whereNotNull('user_id')
-                        ->where('user_id', '!=', auth()->id())
-                        ->pluck('player_id')
-                        ->toArray();
-    
-                    if (!empty($playerIds)) {
-                        $notificationController = app(NotificationController::class);
-                        $notificationController->sendOneSignalNotification(
-                            $playerIds,
-                            "El equipo {$predefinedTeam->nombre} se ha inscrito en el partido {$match->name}",
-                            "Nuevo equipo inscrito"
-                        );
-                    }
-                }
+                // No enviar notificación aquí, esperar a finalizeTeamRegistration
     
                 return response()->json([
-                    'message' => 'Equipo predefinido inscrito exitosamente',
+                    'message' => 'Equipo predefinido registrado, asigna posiciones',
                     'match_team_id' => $targetTeam->id,
                 ]);
             });
@@ -201,6 +146,92 @@ class MatchPlayersController extends Controller
             return response()->json(['message' => 'Error al inscribir equipo: ' . $e->getMessage()], 500);
         }
     }
+
+    public function finalizeTeamRegistration(Request $request, $teamId)
+    {
+        try {
+            $team = MatchTeam::findOrFail($teamId);
+            $match = EquipoPartido::findOrFail($team->equipo_partido_id);
+            $user = auth()->user();
+
+            // Verificar que el usuario sea el capitán
+            $predefinedTeam = Equipo::where('nombre', $team->name)->first();
+            if (!$predefinedTeam || !$predefinedTeam->esCapitan($user)) {
+                return response()->json(['message' => 'Solo el capitán puede finalizar la inscripción'], 403);
+            }
+
+            // Verificar que todas las posiciones estén asignadas
+            $playersWithoutPosition = $team->players()->where('position', 'Sin posición')->count();
+            if ($playersWithoutPosition > 0) {
+                return response()->json(['message' => 'Todos los jugadores deben tener una posición asignada'], 400);
+            }
+
+            // Actualizar el estado del equipo a completado
+            $team->status = 'completed';
+            $team->save();
+
+            // Verificar si el partido está lleno
+            $allTeams = MatchTeam::where('equipo_partido_id', $match->id)->get();
+            $allTeamsFull = $allTeams->every(fn($t) => $t->player_count >= $t->max_players);
+
+            if ($allTeamsFull) {
+                $match->status = 'full';
+                $match->save();
+
+                // Programar notificaciones
+                $matchStartTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->start_time);
+                NotificationEvent::create([
+                    'equipo_partido_id' => $match->id,
+                    'event_type' => 'match_start',
+                    'scheduled_at' => $matchStartTime,
+                    'message' => 'Tu partido está por comenzar'
+                ]);
+
+                $matchEndTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->end_time);
+                NotificationEvent::create([
+                    'equipo_partido_id' => $match->id,
+                    'event_type' => 'match_rating',
+                    'scheduled_at' => $matchEndTime,
+                    'message' => '¡El partido ha terminado! Califica a tus compañeros'
+                ]);
+
+                $playerIds = DeviceToken::whereHas('user', fn($q) => $q->whereHas('matchTeamPlayers.team', fn($q) => $q->where('equipo_partido_id', $match->id)))
+                    ->pluck('player_id')
+                    ->toArray();
+
+                if (!empty($playerIds)) {
+                    $notificationController = app(NotificationController::class);
+                    $notificationController->sendOneSignalNotification(
+                        $playerIds,
+                        "¡El partido está completo! Nos vemos en la cancha",
+                        "Partido Completo"
+                    );
+                }
+            } else {
+                // Enviar notificación de equipo inscrito
+                $playerIds = DeviceToken::whereNotNull('user_id')
+                    ->where('user_id', '!=', auth()->id())
+                    ->pluck('player_id')
+                    ->toArray();
+
+                if (!empty($playerIds)) {
+                    $notificationController = app(NotificationController::class);
+                    $notificationController->sendOneSignalNotification(
+                        $playerIds,
+                        "El equipo {$team->name} se ha inscrito en el partido {$match->name}",
+                        "Nuevo equipo inscrito"
+                    );
+                }
+            }
+
+            return response()->json(['message' => 'Equipo inscrito exitosamente']);
+        } catch (\Exception $e) {
+            Log::error('Error al finalizar inscripción de equipo: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al finalizar inscripción: ' . $e->getMessage()], 500);
+        }
+    }
+    
+
     // En MatchPlayersController.php
     public function isTeamCaptain(Request $request, $teamId)
     {
