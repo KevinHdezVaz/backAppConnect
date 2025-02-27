@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BonoController;
 use App\Http\Controllers\StoryController;
+use App\Http\Controllers\WalletController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\API\FieldController;
@@ -77,8 +78,11 @@ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
     
     Route::get('matches/to-rate', [DailyMatchController::class, 'getMatchesToRate']);
     Route::get('matches/{match}/ratings', [DailyMatchController::class, 'getMatchRatings']);
-
     
+    Route::resource('wallet', WalletController::class)->only(['index', 'deposit']);
+    Route::post('wallet/referral', [WalletController::class, 'addReferralPoints']);
+     
+
     Route::get('/equipos', [MatchPlayersController::class, 'getPredefinedTeams']);
     Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
  
@@ -96,7 +100,7 @@ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
         Route::get('/payments/verify-status/{paymentId}', [PaymentController::class, 'verifyPaymentStatus']);
  
   //  Route::get('/matches/{matchId}/teams', [MatchTeamController::class, 'getTeamsForMatch']);
-   // Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']);
+   // Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']); 
     Route::post('/teams/{teamId}/leave', [MatchTeamController::class, 'leaveTeam']);
     Route::get('/api/fields/{fieldId}/matches', [DailyMatchController::class, 'getMatchesByField']);
     Route::post('matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
@@ -182,6 +186,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/fields/{field}/booked-hours', [FieldController::class, 'getBookedHours']);
     Route::post('/fields/{field}/update-hours', [FieldController::class, 'updateAvailableHours']);
+    Route::get('bookings/check-payment/{paymentId}', [BookingController::class, 'checkPaymentExists']);
 
     Route::get('/bookings', [BookingController::class, 'index']);
     Route::post('/bookings', [BookingController::class, 'store']);

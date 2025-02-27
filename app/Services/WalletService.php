@@ -1,94 +1,57 @@
 <?php
 namespace App\Services;
 
+use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\DB;
 
 class WalletService
 {
-    public function handleMatchRefund($userId, $matchId, $amount, $reason)
+    public function deposit(User $user, float $amount, string $description)
     {
-        return DB::transaction(function() use ($userId, $matchId, $amount, $reason) {
-            $wallet = Wallet::firstOrCreate(
-                ['user_id' => $userId],
-                ['balance' => 0, 'status' => 'active']
-            );
-
-            // Crear la transacción de reembolso
-            $transaction = WalletTransaction::create([
-                'wallet_id' => $wallet->id,
-                'type' => 'credit',
-                'amount' => $amount,
-                'description' => "Reembolso por partido cancelado: $reason",
-                'source' => 'match_refund',
-                'source_reference' => $matchId,
-                'metadata' => [
-                    'match_id' => $matchId,
-                    'refund_reason' => $reason,
-                    'original_payment_date' => now()
-                ]
-            ]);
-
-            // Actualizar el balance
+        return DB::transaction(function () use ($user, $amount, $description) {
+            $wallet = $user->wallet ?: Wallet::create(['user_id' => $user->id]);
             $wallet->increment('balance', $amount);
-
-            return $transaction;
+            return $wallet->transactions()->create([
+                'type' => 'deposit',
+                'amount' => $amount,
+                'description' => $description,
+            ]);
         });
     }
 
-    public function addReward($userId, $amount, $activityType, $activityId)
+    public function withdraw(User $user, float $amount, string $description)
     {
-        return DB::transaction(function() use ($userId, $amount, $activityType, $activityId) {
-            $wallet = Wallet::firstOrCreate(
-                ['user_id' => $userId],
-                ['balance' => 0, 'status' => 'active']
-            );
-
-            $transaction = WalletTransaction::create([
-                'wallet_id' => $wallet->id,
-                'type' => 'credit',
-                'amount' => $amount,
-                'description' => "Recompensa por $activityType",
-                'source' => 'reward',
-                'source_reference' => $activityId,
-                'metadata' => [
-                    'activity_type' => $activityType,
-                    'activity_id' => $activityId
-                ]
-            ]);
-
-            $wallet->increment('balance', $amount);
-
-            return $transaction;
-        });
-    }
-
-    public function useForMatchPayment($userId, $matchId, $amount)
-    {
-        return DB::transaction(function() use ($userId, $matchId, $amount) {
-            $wallet = Wallet::where('user_id', $userId)->firstOrFail();
-
-            if ($wallet->balance < $amount) {
-                throw new \Exception('Saldo insuficiente en el monedero');
+        return DB::transaction(function () use ($user, $amount, $description) {
+            $wallet = $user->wallet;
+            if (!$wallet || $wallet->balance < $amount) {
+                throw new \Exception('Saldo insuficiente');
             }
-
-            $transaction = WalletTransaction::create([
-                'wallet_id' => $wallet->id,
-                'type' => 'debit',
-                'amount' => $amount,
-                'description' => "Pago de partido",
-                'source' => 'payment',
-                'source_reference' => $matchId,
-                'metadata' => [
-                    'match_id' => $matchId,
-                    'payment_date' => now()
-                ]
-            ]);
-
             $wallet->decrement('balance', $amount);
-
-            return $transaction;
+            return $wallet->transactions()->create([
+                'type' => 'withdrawal',
+                'amount' => $amount,
+                'description' => $description,
+            ]);
         });
+    }
+
+    public function addPoints(User $user, int $points, string $description)
+    {
+        return DB::transaction(function () use ($user, $points, $description) {
+            $wallet = $user->wallet ?: Wallet::create(['user_id' => $user->id]);
+            $wallet->increment('points', $points);
+            return $wallet->transactions()->create([
+                'type' => 'points_earned',
+                'points' => $points,
+                'description' => $description,
+            ]);
+        });
+    }
+
+    public function refundBooking(User $user, float $amount, string $bookingReference)
+    {
+        return $this->deposit($user, $amount, "Reembolso por cancelación de reserva #$bookingReference");
     }
 }

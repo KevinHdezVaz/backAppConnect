@@ -61,18 +61,11 @@ public function equipos()
                 ->withPivot(['rol', 'estado', 'posicion'])
                 ->withTimestamps();
 }
-public function wallet()
-{
-    return $this->hasOne(Wallet::class);
-}
 
-public function walletTransactions()
-{
-    return $this->hasManyThrough(
-        WalletTransaction::class,
-        Wallet::class
-    );
-}
+public function wallet()
+    {
+        return $this->hasOne(Wallet::class);
+    }
 
 // Método de utilidad para el monedero
 public function getWalletBalance()
@@ -91,8 +84,7 @@ public function createWalletIfNotExists()
     return $this->wallet;
 }
 
-
-// app/Models/User.php
+ 
 public function mensajes()
 {
     return $this->hasMany(ChatMensaje::class);

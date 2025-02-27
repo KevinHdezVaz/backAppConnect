@@ -7,17 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Wallet extends Model
 {
-    protected $fillable = [
-        'user_id',
-        'balance',
-        'status'
-    ];
+    protected $fillable = ['user_id', 'balance', 'points'];
 
-    protected $casts = [
-        'balance' => 'decimal:2'
-    ];
-
-    // Relaciones
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -26,24 +17,5 @@ class Wallet extends Model
     public function transactions()
     {
         return $this->hasMany(WalletTransaction::class);
-    }
-
-    // Métodos de utilidad
-    public function hasEnoughBalance($amount)
-    {
-        return $this->balance >= $amount;
-    }
-
-    public function addMoney($amount)
-    {
-        $this->increment('balance', $amount);
-    }
-
-    public function deductMoney($amount)
-    {
-        if (!$this->hasEnoughBalance($amount)) {
-            throw new \Exception('Saldo insuficiente');
-        }
-        $this->decrement('balance', $amount);
     }
 }
