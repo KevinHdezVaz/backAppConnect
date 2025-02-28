@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Password; // Asegúrate de que esta línea esté 
 
 class AuthController extends Controller
 {
+    
     public function register(Request $request)
     {
         // Validar los datos de entrada
@@ -21,44 +22,57 @@ class AuthController extends Controller
             'password' => 'required|min:6',
             'phone' => 'required|string',
             'codigo_postal' => 'required|string',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', 
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
+            'referral_code' => 'nullable|string', // Código de referido opcional
         ]);
-    
-        // Generar un invite_code único
+
+        // Generar un invite_code único (para unirse a equipos)
         do {
             $inviteCode = substr(md5($validated['email'] . time()), 0, 8);
         } while (User::where('invite_code', $inviteCode)->exists());
-    
         $validated['invite_code'] = $inviteCode;
-    
-        // Manejar la subida de la imagen de perfil (si se proporciona)
+
+        // Generar un referral_code único (para referidos)
+        do {
+            $referralCode = substr(md5($validated['email'] . rand()), 0, 8);
+        } while (User::where('referral_code', $referralCode)->exists());
+        $validated['referral_code'] = $referralCode;
+
+        // Verificar si se proporcionó un referral_code y buscar al referrer
+        $referrer = null;
+        if ($request->has('referral_code') && !empty($request->referral_code)) {
+            $referrer = User::where('referral_code', $request->referral_code)->first();
+            if (!$referrer) {
+                return response()->json(['message' => 'Código de referido inválido'], 400);
+            }
+            $validated['referred_by'] = $referrer->id;
+        }
+
+        // Manejar la subida de la imagen de perfil
         if ($request->hasFile('profile_image')) {
             try {
-                // Guardar la imagen en el almacenamiento público
                 $path = $request->file('profile_image')->store('profiles', 'public');
                 $validated['profile_image'] = $path;
                 \Log::info('Image uploaded:', ['path' => $path]);
             } catch (\Exception $e) {
-                // Registrar el error si la subida de la imagen falla
                 \Log::error('Error uploading image:', ['error' => $e->getMessage()]);
                 return response()->json(['message' => 'Error uploading image'], 500);
             }
         }
-    
-        // Hashear la contraseña antes de guardarla
+
+        // Hashear la contraseña
         $validated['password'] = Hash::make($validated['password']);
-    
-        // Crear el usuario en la base de datos
+
+        // Crear el usuario
         $user = User::create($validated);
-    
-        // Crear un token de autenticación para el usuario
+
+        // Crear un token de autenticación
         $token = $user->createToken('auth_token')->plainTextToken;
-    
-        // Devolver la respuesta con el usuario y el token
+
         return response()->json([
             'user' => $user,
             'token' => $token
-        ], 201); // Código de estado 201: Created
+        ], 201);
     }
     
 

@@ -54,4 +54,16 @@ class WalletService
     {
         return $this->deposit($user, $amount, "Reembolso por cancelación de reserva #$bookingReference");
     }
+
+    public function refundMatch(User $user, float $amount, string $matchReference)
+    {
+        return $this->deposit($user, $amount, "Reembolso por partido cancelado #$matchReference");
+    }
+
+    public function refundLeaveMatch(User $user, float $amount, string $matchReference)
+    {
+        return $this->deposit($user, $amount, "Reembolso por abandono de equipo #$matchReference");
+    }
+
+    
 }

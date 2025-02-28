@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Carbon\Carbon;
+use App\Models\Order;
 use App\Models\Equipo;
 use App\Models\MatchTeam;
 use App\Models\DailyMatch;
@@ -10,12 +11,22 @@ use App\Models\DeviceToken;
 use Illuminate\Http\Request;
 use App\Models\EquipoPartido;
 use App\Models\MatchTeamPlayer;
+use App\Services\WalletService;
 use App\Models\NotificationEvent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class MatchPlayersController extends Controller
 {
+
+    protected $walletService;
+
+    public function __construct(WalletService $walletService)
+    {
+        $this->walletService = $walletService;
+    }
+ 
+    
     public function getTeams($matchId)
     {
         try {
@@ -147,6 +158,40 @@ class MatchPlayersController extends Controller
         }
     }
 
+    public function cancelMatch(Request $request, $matchId)
+{
+    try {
+        $match = EquipoPartido::findOrFail($matchId);
+        $user = auth()->user();
+
+        // Verificar si el usuario tiene permisos para cancelar el partido
+        if (!$match->canBeCancelledBy($user)) {
+            return response()->json(['message' => 'No tienes permisos para cancelar este partido'], 403);
+        }
+
+        // Cambiar el estado del partido a "cancelado"
+        $match->update(['status' => 'cancelled']);
+
+        // Reembolsar a todos los jugadores registrados en el partido
+        $teams = MatchTeam::where('equipo_partido_id', $matchId)->get();
+        foreach ($teams as $team) {
+            foreach ($team->players as $player) {
+                $this->walletService->refundMatch(
+                    $player->user,
+                    $match->price, // Monto a reembolsar (precio del partido)
+                    "Reembolso por cancelación de partido #{$match->id}"
+                );
+            }
+        }
+
+        return response()->json(['message' => 'Partido cancelado y reembolsos realizados']);
+    } catch (\Exception $e) {
+        \Log::error('Error al cancelar partido: ' . $e->getMessage());
+        return response()->json(['message' => 'Error al cancelar partido: ' . $e->getMessage()], 500);
+    }
+}
+
+
     public function finalizeTeamRegistration(Request $request, $teamId)
     {
         try {
@@ -260,6 +305,95 @@ class MatchPlayersController extends Controller
         }
     }
     
+    public function leaveTeam(Request $request, $teamId)
+    {
+        try {
+            return DB::transaction(function () use ($request, $teamId) {
+                $user = auth()->user();
+                $player = MatchTeamPlayer::where('match_team_id', $teamId)
+                    ->where('user_id', $user->id)
+                    ->first();
+
+                if (!$player) {
+                    return response()->json(['error' => 'No estás en este equipo'], 404);
+                }
+
+                $team = MatchTeam::findOrFail($teamId);
+                $match = EquipoPartido::findOrFail($team->equipo_partido_id);
+
+                // Buscar la orden asociada al pago, asumiendo que 'completed' significa no reembolsada
+                $order = Order::where('user_id', $user->id)
+                    ->where('type', 'match')
+                    ->where('reference_id', $match->id)
+                    ->where('status', 'completed')
+                    ->first();
+
+                $price = $order ? floatval($order->total) : floatval($match->price ?? 0);
+                $refunded = false;
+                $refundedAmount = 0;
+
+                if ($order && $price > 0) {
+                    try {
+                        $this->walletService->refundLeaveMatch(
+                            $user,
+                            $price,
+                            "Reembolso por abandonar equipo en partido #{$match->id}"
+                        );
+                        $refunded = true;
+                        $refundedAmount = $price;
+
+                        // Actualizamos el status a 'refunded' para marcar la orden como reembolsada
+                        $order->update(['status' => 'refunded']);
+
+                        \Log::info('Reembolso procesado exitosamente al monedero', [
+                            'user_id' => $user->id,
+                            'amount' => $price,
+                            'new_balance' => $user->wallet->balance ?? 0,
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error('Error al procesar reembolso al monedero: ' . $e->getMessage());
+                        throw new \Exception('No se pudo procesar el reembolso: ' . $e->getMessage());
+                    }
+                } else {
+                    \Log::warning('No se procesó reembolso', [
+                        'order_exists' => $order ? true : false,
+                        'price' => $price,
+                        'reason' => $order ? 'Orden ya reembolsada o inválida' : 'No se encontró orden de pago',
+                    ]);
+                }
+
+                $player->delete();
+                $team->decrement('player_count');
+
+                $allTeams = MatchTeam::where('equipo_partido_id', $match->id)->get();
+                $allTeamsFull = $allTeams->every(fn($t) => $t->player_count >= $t->max_players);
+
+                if ($match->status === 'full' && !$allTeamsFull) {
+                    $match->update(['status' => 'open']);
+                }
+
+                \Log::info('Jugador abandonó equipo exitosamente', [
+                    'user_id' => $user->id,
+                    'team_id' => $teamId,
+                    'match_id' => $match->id,
+                    'refunded' => $refunded,
+                    'refunded_amount' => $refundedAmount,
+                ]);
+
+                return response()->json([
+                    'message' => 'Has abandonado el equipo exitosamente' . ($refunded ? ' y se reembolsó al monedero' : ''),
+                    'refunded' => $refunded,
+                    'refunded_amount' => $refundedAmount > 0 ? $refundedAmount : null,
+                ], 200);
+            });
+        } catch (\Exception $e) {
+            \Log::error('Error al abandonar equipo: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            return response()->json(['error' => 'Error al abandonar el equipo: ' . $e->getMessage()], 500);
+        }
+    }
+
+
     public function leaveTeamAsGroup(Request $request, $teamId)
     {
         try {
@@ -345,125 +479,160 @@ class MatchPlayersController extends Controller
         return response()->json($teams);
       }
 
-
-    public function joinTeam(Request $request)
-    {
-        try {
-            \Log::info('Iniciando proceso de unión al equipo', [
-                'request_data' => $request->all()
-            ]);
-    
-            $validated = $request->validate([
-                'match_id' => 'required|exists:equipo_partidos,id',
-                'equipo_partido_id' => 'required|exists:match_teams,id',
-                'position' => 'required|string',
-            ]);
-    
-            // Verificar si el usuario ya está en algún equipo del partido
-            $existingPlayer = MatchTeamPlayer::whereHas('team', function($query) use ($validated) {
-                $query->where('equipo_partido_id', $validated['match_id']);
-            })->where('user_id', auth()->id())->first();
-    
-            if ($existingPlayer) {
-                return response()->json([
-                    'message' => 'Ya estás registrado en este partido'
-                ], 422);
-            }
-    
-            // Verificar si el equipo está lleno
-            $team = MatchTeam::find($validated['equipo_partido_id']);
-            if ($team->player_count >= $team->max_players) {
-                return response()->json([
-                    'message' => 'El equipo está lleno'
-                ], 422);
-            }
-    
-            DB::transaction(function() use ($validated, $team) {
-                // Crear el jugador
-                MatchTeamPlayer::create([
-                    'match_team_id' => $validated['equipo_partido_id'],
-                    'user_id' => auth()->id(),
-                    'position' => $validated['position'],
-                ]);
-    
-                // Actualizar contador de jugadores
-                $team->increment('player_count');
-    
-                // Verificar si el partido está lleno después de este jugador
-                $match = DailyMatch::find($validated['match_id']);
-                $allTeams = MatchTeam::where('equipo_partido_id', $match->id)->get();
-                
-                $allTeamsFull = $allTeams->every(function($team) {
-                    return $team->player_count >= $team->max_players;
-                });
-    
-                if ($allTeamsFull) {
-                    // Actualizar estado del partido a lleno
-                    $match->update(['status' => 'full']);
-     
-                    // Programar notificación para inicio del partido
-                    $matchStartTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date->toDateString() . ' ' . $match->start_time);
-                    NotificationEvent::create([
-                        'equipo_partido_id' => $match->id,
-                        'event_type' => 'match_start',
-                        'scheduled_at' => $matchStartTime,
-                        'message' => 'Tu partido está por comenzar'
-                    ]);
-    
-                    // Programar notificación para evaluaciones
-                    $matchEndTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date->toDateString() . ' ' . $match->end_time);
-                    NotificationEvent::create([
-                        'equipo_partido_id' => $match->id,
-                        'event_type' => 'match_rating',
-                        'scheduled_at' => $matchEndTime,
-                        'message' => '¡El partido ha terminado! Califica a tus compañeros'
-                    ]);
-    
-                    // Notificar a todos los jugadores que el partido está lleno
-                    $playerIds = DeviceToken::whereHas('user', function($query) use ($match) {
-                        $query->whereHas('matchTeamPlayers.team', function($q) use ($match) {
-                            $q->where('equipo_partido_id', $match->id);
-                        });
-                    })->pluck('player_id')->toArray();
-    
-                    if (!empty($playerIds)) {
-                        $notificationController = app(NotificationController::class);
-                        $notificationController->sendOneSignalNotification(
-                            $playerIds,
-                            "¡El partido está completo! Nos vemos en la cancha",
-                            "Partido Completo"
-                        );
-                    }
-                } else {
-                    // Enviar notificación normal de nuevo jugador
-                    $playerIds = DeviceToken::whereNotNull('user_id')
-                        ->where('user_id', '!=', auth()->id())
-                        ->pluck('player_id')
-                        ->toArray();
-    
-                    if (!empty($playerIds)) {
-                        $notificationController = app(NotificationController::class);
-                        $response = $notificationController->sendOneSignalNotification(
-                            $playerIds,
-                            "Un nuevo jugador se ha unido al " . $team->name . " en el partido " . $match->name,
-                            "Nuevo jugador en partido"
-                        );
-    
-                        \Log::info('Respuesta de OneSignal', [
-                            'response' => json_decode($response, true)
-                        ]);
-                    }
-                }
-            });
-    
-            return response()->json(['message' => 'Te has unido al equipo exitosamente']);
-    
-        } catch (\Exception $e) {
-            Log::error('Error al unirse al equipo: ' . $e->getMessage());
-            Log::error($e->getTraceAsString());
-            return response()->json([
-                'message' => 'Error al unirse al equipo: ' . $e->getMessage()
-            ], 500);
-        }
-    }
+      public function joinTeam(Request $request)
+      {
+          try {
+              \Log::info('Iniciando proceso de unión al equipo', [
+                  'request_data' => $request->all()
+              ]);
+  
+              $validated = $request->validate([
+                  'match_id' => 'required|exists:equipo_partidos,id',
+                  'equipo_partido_id' => 'required|exists:match_teams,id',
+                  'position' => 'required|string',
+                  'use_wallet' => 'boolean',
+              ]);
+  
+              $existingPlayer = MatchTeamPlayer::whereHas('team', function($query) use ($validated) {
+                  $query->where('equipo_partido_id', $validated['match_id']);
+              })->where('user_id', auth()->id())->first();
+  
+              if ($existingPlayer) {
+                  return response()->json([
+                      'message' => 'Ya estás registrado en este partido'
+                  ], 422);
+              }
+  
+              $team = MatchTeam::findOrFail($validated['equipo_partido_id']);
+              if ($team->player_count >= $team->max_players) {
+                  return response()->json([
+                      'message' => 'El equipo está lleno'
+                  ], 422);
+              }
+  
+              $match = EquipoPartido::findOrFail($validated['match_id']);
+              $price = floatval($match->price ?? 0);
+              $useWallet = $request->input('use_wallet', false);
+              $amountToPay = $price;
+  
+              return DB::transaction(function() use ($validated, $team, $match, $price, $useWallet) {
+                  $paymentId = null;
+  
+                  if ($price > 0) {
+                      if ($useWallet) {
+                          $wallet = auth()->user()->wallet;
+                          if (!$wallet || $wallet->balance < $price) {
+                              throw new \Exception('Saldo insuficiente en el monedero');
+                          }
+  
+                          $this->walletService->withdraw(
+                              auth()->user(),
+                              $price,
+                              "Pago para unirse al equipo {$team->name} en partido #{$match->id}"
+                          );
+                          \Log::info('Saldo deducido del monedero', [
+                              'user_id' => auth()->id(),
+                              'amount' => $price,
+                              'new_balance' => auth()->user()->wallet->balance
+                          ]);
+                          $amountToPay = 0;
+                      } else {
+                          throw new \Exception('El pago con MercadoPago no está implementado aún');
+                      }
+                  }
+  
+                  $player = MatchTeamPlayer::create([
+                      'match_team_id' => $validated['equipo_partido_id'],
+                      'user_id' => auth()->id(),
+                      'position' => $validated['position'],
+                      'payment_id' => $paymentId,
+                  ]);
+  
+                  $team->increment('player_count');
+  
+                  // Verificar si es el primer partido del usuario y tiene un referred_by
+                  $user = auth()->user();
+                  $matchCount = MatchTeamPlayer::where('user_id', $user->id)->count();
+                  if ($matchCount == 1 && $user->referred_by) {
+                      $referrer = User::find($user->referred_by);
+                      if ($referrer) {
+                          // Otorgar 350 UYU a ambos
+                          $this->walletService->deposit($user, 350, "Bonificación por primer partido con referido de #{$referrer->id}");
+                          $this->walletService->deposit($referrer, 350, "Bonificación por primer partido de referido #{$user->id}");
+  
+                          \Log::info('Bonificación de 350 UYU aplicada por primer partido con referido', [
+                              'user_id' => $user->id,
+                              'referrer_id' => $referrer->id,
+                          ]);
+                      }
+                  }
+  
+                  $allTeams = MatchTeam::where('equipo_partido_id', $match->id)->get();
+                  $allTeamsFull = $allTeams->every(function($team) {
+                      return $team->player_count >= $team->max_players;
+                  });
+  
+                  if ($allTeamsFull) {
+                      $match->update(['status' => 'full']);
+                      $matchStartTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->start_time);
+                      NotificationEvent::create([
+                          'equipo_partido_id' => $match->id,
+                          'event_type' => 'match_start',
+                          'scheduled_at' => $matchStartTime,
+                          'message' => 'Tu partido está por comenzar'
+                      ]);
+  
+                      $matchEndTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->end_time);
+                      NotificationEvent::create([
+                          'equipo_partido_id' => $match->id,
+                          'event_type' => 'match_rating',
+                          'scheduled_at' => $matchEndTime,
+                          'message' => '¡El partido ha terminado! Califica a tus compañeros'
+                      ]);
+  
+                      $playerIds = DeviceToken::whereHas('user', function($query) use ($match) {
+                          $query->whereHas('matchTeamPlayers.team', function($q) use ($match) {
+                              $q->where('equipo_partido_id', $match->id);
+                          });
+                      })->pluck('player_id')->toArray();
+  
+                      if (!empty($playerIds)) {
+                          $notificationController = app(NotificationController::class);
+                          $notificationController->sendOneSignalNotification(
+                              $playerIds,
+                              "¡El partido está completo! Nos vemos en la cancha",
+                              "Partido Completo"
+                          );
+                      }
+                  } else {
+                      $playerIds = DeviceToken::whereNotNull('user_id')
+                          ->where('user_id', '!=', auth()->id())
+                          ->pluck('player_id')
+                          ->toArray();
+  
+                      if (!empty($playerIds)) {
+                          $notificationController = app(NotificationController::class);
+                          $notificationController->sendOneSignalNotification(
+                              $playerIds,
+                              "Un nuevo jugador se ha unido al " . $team->name . " en el partido " . $match->name,
+                              "Nuevo jugador en partido"
+                          );
+                      }
+                  }
+  
+                  return response()->json([
+                      'message' => 'Te has unido al equipo exitosamente',
+                      'used_wallet' => $useWallet && $price > 0,
+                      'amount_paid' => $price,
+                  ]);
+              });
+  
+          } catch (\Exception $e) {
+              \Log::error('Error al unirse al equipo: ' . $e->getMessage());
+              \Log::error($e->getTraceAsString());
+              return response()->json([
+                  'message' => 'Error al unirse al equipo: ' . $e->getMessage()
+              ], 500);
+          }
+      }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Carbon\Carbon;
 use App\Models\Bono;
+use App\Models\User;
 use App\Models\Order;
 use App\Models\Booking;
 use App\Models\UserBono;

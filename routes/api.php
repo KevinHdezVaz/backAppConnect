@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BonoController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\WalletController;
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\API\FieldController;
@@ -42,6 +43,7 @@ Route::post('webhook/mercadopago', [WebhookController::class, 'handleMercadoPago
 
 
 
+
  //ruta para equipo
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -70,6 +72,11 @@ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
     });
  
 
+    // routes/api.php
+Route::get('/matches/{matchId}/comments', [CommentController::class, 'index']);
+Route::post('/matches/{matchId}/comments', [CommentController::class, 'store']);
+
+
     Route::get('matches/{match}/rating', [MatchRatingController::class, 'showRatingScreen']);
     Route::post('matches/{match}/rating', [MatchRatingController::class, 'submitRatings']);
     Route::get('players/{user}/stats', [MatchRatingController::class, 'getPlayerStats']);
@@ -84,11 +91,10 @@ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
      
 
     Route::get('/equipos', [MatchPlayersController::class, 'getPredefinedTeams']);
-    Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
- 
+  
     Route::put('match-teams/{teamId}/players/{playerId}/position', [MatchPlayersController::class, 'updatePlayerPosition']);
     Route::get('/matches/{id}', [DailyMatchController::class, 'show'])->name('matches.show');  
-    Route::post('/matches/join-team', [MatchPlayersController::class, 'joinTeam']);
+    Route::post('/match/join-team', [MatchPlayersController::class, 'joinTeam']);
         Route::get('/matches/{matchId}/teams', [MatchPlayersController::class, 'getTeams']);
         Route::get('match-teams/{teamId}/is-captain', [MatchPlayersController::class, 'isTeamCaptain']);
         Route::post('match-teams/{teamId}/leave-group', [MatchPlayersController::class, 'leaveTeamAsGroup']);
@@ -101,7 +107,7 @@ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
  
   //  Route::get('/matches/{matchId}/teams', [MatchTeamController::class, 'getTeamsForMatch']);
    // Route::post('/matches/join-team', [MatchTeamController::class, 'joinTeam']); 
-    Route::post('/teams/{teamId}/leave', [MatchTeamController::class, 'leaveTeam']);
+      Route::post('/match-teams/{teamId}/leave', [MatchPlayersController::class, 'leaveTeam']);
     Route::get('/api/fields/{fieldId}/matches', [DailyMatchController::class, 'getMatchesByField']);
     Route::post('matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
      Route::get('matches/{match}/teams', [DailyMatchController::class, 'getMatchTeams']);

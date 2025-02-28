@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Services\WalletService;
@@ -22,6 +23,7 @@ class WalletController extends Controller
         return response()->json([
             'balance' => $wallet['balance'],
             'points' => $wallet['points'],
+            'referral_code' => $user->referral_code, // Añadimos el referral_code del usuario
             'transactions' => $transactions,
         ]);
     }
@@ -36,8 +38,7 @@ class WalletController extends Controller
     public function addReferralPoints(Request $request)
     {
         $request->validate(['referral_code' => 'required|string']);
-        // Lógica para validar el código de referido (puedes integrarlo con tu sistema de referidos)
-        $this->walletService->addPoints(Auth::user(), 50, 'Puntos por referido');
+        $this->walletService->addPoints(Auth::user(), 250, 'Puntos por referido');
         return response()->json(['message' => 'Puntos agregados por referido']);
     }
 }
