@@ -37,13 +37,13 @@
                     </div>
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="type">Tipo de Cancha</label>
-                            <select name="type" class="form-control @error('type') is-invalid @enderror" required>
-                                <option value="futbol5" {{ $field->type == 'futbol5' ? 'selected' : '' }}>Fútbol 5</option>
-                                <option value="futbol7" {{ $field->type == 'futbol7' ? 'selected' : '' }}>Fútbol 7</option>
-                                <option value="futbol11" {{ $field->type == 'futbol11' ? 'selected' : '' }}>Fútbol 11</option>
+                            <label for="types">Tipos de Cancha</label>
+                            <select name="types[]" class="form-control @error('types') is-invalid @enderror" multiple required>
+                                <option value="fut5" {{ in_array('fut5', json_decode($field->types ?? '[]', true)) ? 'selected' : '' }}>Fútbol 5</option>
+                                <option value="fut7" {{ in_array('fut7', json_decode($field->types ?? '[]', true)) ? 'selected' : '' }}>Fútbol 7</option>
+                                <option value="fut11" {{ in_array('fut11', json_decode($field->types ?? '[]', true)) ? 'selected' : '' }}>Fútbol 11</option>
                             </select>
-                            @error('type')
+                            @error('types')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>

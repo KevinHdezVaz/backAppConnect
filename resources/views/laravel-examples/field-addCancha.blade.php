@@ -11,7 +11,48 @@
     padding: 20px;
     border-radius: 5px;
     text-align: center;
-    z-index: 1000;
+    z-index: 1010; /* Aumentado para estar encima de todo */
+}
+
+#map {
+    height: 400px;
+    width: 100%;
+    position: relative;
+    z-index: 1005; /* Mapa en frente, pero detrás del autocompletado y spinner */
+}
+
+.modal-content {
+    position: relative;
+    z-index: 1000; /* Modal detrás del mapa y resultados */
+}
+
+#searchLocation {
+    position: relative;
+    z-index: 1020; /* Input de búsqueda en el frente para autocompletado, aumentado para mayor prioridad */
+}
+
+/* Estilo para los resultados de autocompletado de Google Places */
+.pac-container {
+    z-index: 1030 !important; /* Aumentado para asegurar que los resultados estén en el frente absoluto */
+    position: absolute;
+    top: 100% !important; /* Posiciona los resultados justo debajo del input */
+    left: 0 !important;
+}
+
+/* Asegura que el mapa no tape los resultados y que sea interactivo */
+#mapModal .modal-body {
+    padding: 0;
+    overflow: visible; /* Permite que los elementos sobresalgan del modal si es necesario */
+}
+
+/* Evitar que el formulario principal se envíe con Enter en el input de búsqueda */
+#searchLocation {
+    outline: none; /* Opcional: mejora visual */
+}
+
+/* Asegúrate de que los marcadores y elementos del mapa sean interactivos */
+.gm-style {
+    z-index: 1015 !important;
 }
 </style>
 
@@ -45,28 +86,43 @@
         </div>
     @endif
 
-    <form action="{{ route('field-management.store') }}" method="POST" enctype="multipart/form-data">
-
+    <form id="fieldForm" action="{{ route('field-management.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="name">Nombre de la Cancha</label>
-                            <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" required>
+                            <input type="text" name="name" id="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name') }}" required>
                             @error('name')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
                     </div>
+
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="type">Tipo de Cancha</label>
-                            <select name="type" class="form-control @error('type') is-invalid @enderror" required>
-                                <option value="futbol5">Fútbol 5</option>
-                                <option value="futbol7">Fútbol 7</option>
-                                <option value="futbol11">Fútbol 11</option>
-                            </select>
-                            @error('type')
+                            <label>Tipo de Cancha</label>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="types[]" value="fut5" {{ in_array('fut5', old('types', [])) ? 'checked' : '' }}>
+                                        <label class="form-check-label">Fútbol 5</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="types[]" value="fut7" {{ in_array('fut7', old('types', [])) ? 'checked' : '' }}>
+                                        <label class="form-check-label">Fútbol 7</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="types[]" value="fut11" {{ in_array('fut11', old('types', [])) ? 'checked' : '' }}>
+                                        <label class="form-check-label">Fútbol 11</label>
+                                    </div>
+                                </div>
+                            </div>
+                            @error('types')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
@@ -75,7 +131,7 @@
 
                 <div class="form-group">
                     <label for="description">Descripción</label>
-                    <textarea name="description" class="form-control @error('description') is-invalid @enderror" rows="3" required></textarea>
+                    <textarea name="description" class="form-control @error('description') is-invalid @enderror" rows="3" required>{{ old('description') }}</textarea>
                     @error('description')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
@@ -101,22 +157,21 @@
             <div class="input-group">
                 <span class="input-group-text">$</span>
                 <input type="number" name="price_per_match" step="0.01" 
-                       class="form-control @error('price_per_match') is-invalid @enderror" required>
+                       class="form-control @error('price_per_match') is-invalid @enderror" value="{{ old('price_per_match') }}" required>
                 @error('price_per_match')
-                    <div class="invalid-feedback">{{ $message }}</div>
+                    <div class="invalid-feedback">{{ $message }}</div> <!-- Corregido de $methodage a $message -->
                 @enderror
             </div>
         </div>
     </div>
 </div>
 
-
                 <div class="row mb-3">
     <div class="col-md-4"> <!-- Reducimos el ancho a la mitad -->
         <div class="form-group">
             <label for="location">Ubicación</label>
             <div>
-                <input type="hidden" name="location" id="location" class="@error('location') is-invalid @enderror" required>
+                <input type="hidden" name="location" id="location" class="form-control @error('location') is-invalid @enderror" required>
                 <button type="button" class="btn btn-primary w-100" onclick="showMap()">
                     <i class="fas fa-map-marker-alt me-2"></i> Seleccionar ubicación en el mapa
                 </button>
@@ -128,13 +183,12 @@
         </div>
     </div>
 </div>
-
 </div>
 <div class="row">
     <div class="col-md-6">
         <div class="form-group">
             <label for="latitude">Latitud</label>
-            <input type="number" id="latitude" name="latitude" class="form-control @error('latitude') is-invalid @enderror" step="any" readonly>
+            <input type="number" id="latitude" name="latitude" class="form-control @error('latitude') is-invalid @enderror" step="any" readonly value="{{ old('latitude') }}">
             @error('latitude')
                 <div class="invalid-feedback">{{ $message }}</div>
             @enderror
@@ -143,15 +197,13 @@
     <div class="col-md-6">
         <div class="form-group">
             <label for="longitude">Longitud</label>
-            <input type="number" id="longitude" name="longitude" class="form-control @error('longitude') is-invalid @enderror" step="any" readonly>
+            <input type="number" id="longitude" name="longitude" class="form-control @error('longitude') is-invalid @enderror" step="any" readonly value="{{ old('longitude') }}">
             @error('longitude')
                 <div class="invalid-feedback">{{ $message }}</div>
             @enderror
         </div>
     </div>
 </div>
-
- 
 
 <!-- Modal para el mapa -->
 <div class="modal fade" id="mapModal" tabindex="-1" aria-labelledby="mapModalLabel" aria-hidden="true">
@@ -188,23 +240,26 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="amenities[]" value="Vestuarios">
+                                <input class="form-check-input" type="checkbox" name="amenities[]" value="Vestuarios" {{ in_array('Vestuarios', old('amenities', [])) ? 'checked' : '' }}>
                                 <label class="form-check-label">Vestuarios</label>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="amenities[]" value="Estacionamiento">
+                                <input class="form-check-input" type="checkbox" name="amenities[]" value="Estacionamiento" {{ in_array('Estacionamiento', old('amenities', [])) ? 'checked' : '' }}>
                                 <label class="form-check-label">Estacionamiento</label>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="amenities[]" value="Iluminación nocturna">
+                                <input class="form-check-input" type="checkbox" name="amenities[]" value="Iluminación nocturna" {{ in_array('Iluminación nocturna', old('amenities', [])) ? 'checked' : '' }}>
                                 <label class="form-check-label">Iluminación nocturna</label>
                             </div>
                         </div>
                     </div>
+                    @error('amenities')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
                 </div>
 
                 <div class="form-group">
@@ -232,7 +287,7 @@
                 </div>
 
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" name="is_active" checked>
+                    <input class="form-check-input" type="checkbox" name="is_active" {{ old('is_active') ? 'checked' : '' }}>
                     <label class="form-check-label">Cancha Activa</label>
                 </div>
 
@@ -353,9 +408,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Inicializar los horarios al cargar la página
     updateAvailableHours();
-
-
-    
 });
 </script>
 
@@ -368,16 +420,21 @@ function showMap() {
     const modal = new bootstrap.Modal(document.getElementById('mapModal'));
     modal.show();
     
-    setTimeout(() => {
-        initMap();
-    }, 500);
+    // Verificar si el elemento existe antes de añadir el listener
+    const mapModal = document.getElementById('mapModal');
+    if (mapModal) {
+        mapModal.addEventListener('shown.bs.modal', function () {
+            initMap();
+        });
+    } else {
+        console.error('El elemento mapModal no se encontró en el DOM.');
+    }
 }
 
 function initMap() {
-
     document.getElementById('location-loading').classList.remove('d-none');
 
-    // Primero intentamos obtener la ubicación actual
+    // Primero intentamos obtener la ubicación actual con un timeout
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -388,22 +445,23 @@ function initMap() {
                 initializeMapWithPosition(currentPosition);
                 document.getElementById('location-loading').classList.add('d-none');
             },
-            () => {
-                // Si falla, usamos una posición por defecto
-                const defaultPosition = { lat: -34.6037, lng: -58.3816 }; // Buenos Aires
+            (error) => {
+                console.error('Error al obtener la ubicación:', error);
+                const defaultPosition = { lat: 19.29371244831551, lng: -99.19100707319005 }; // Ciudad de México
+                alert('No se pudo obtener tu ubicación. Usando ubicación por defecto.');
                 initializeMapWithPosition(defaultPosition);
                 document.getElementById('location-loading').classList.add('d-none');
-            }
+            },
+            { timeout: 10000 } // 10 segundos de espera máxima
         );
-    }else {
-        // Si no hay geolocalización disponible, usamos posición por defecto
-        const defaultPosition = { lat: 19.29371244831551 , lng: -99.19100707319005 };
+    } else {
+        const defaultPosition = { lat: 19.29371244831551, lng: -99.19100707319005 }; // Ciudad de México
         initializeMapWithPosition(defaultPosition);
+        document.getElementById('location-loading').classList.add('d-none');
     }
 }
 
 function initializeMapWithPosition(position) {
-    // Inicializar el mapa
     map = new google.maps.Map(document.getElementById('map'), {
         center: position,
         zoom: 15
@@ -411,22 +469,21 @@ function initializeMapWithPosition(position) {
 
     geocoder = new google.maps.Geocoder();
 
-    // Colocar marcador en la posición inicial
     placeMarker(position);
 
-    // Agregar marcador al hacer clic
     map.addListener('click', function(e) {
         placeMarker(e.latLng);
     });
 
-    // Inicializar el buscador
     const searchInput = document.getElementById('searchLocation');
     const searchBox = new google.maps.places.SearchBox(searchInput);
 
+    // Ajustar los límites del SearchBox para que se actualicen con el mapa
     map.addListener('bounds_changed', function() {
         searchBox.setBounds(map.getBounds());
     });
 
+    // Manejar los resultados del SearchBox
     searchBox.addListener('places_changed', function() {
         const places = searchBox.getPlaces();
 
@@ -437,6 +494,32 @@ function initializeMapWithPosition(position) {
         const place = places[0];
         map.setCenter(place.geometry.location);
         placeMarker(place.geometry.location);
+
+        if (marker) {
+            marker.setMap(null);
+        }
+
+        marker = new google.maps.Marker({
+            position: place.geometry.location,
+            map: map,
+            animation: google.maps.Animation.DROP,
+            zIndex: 1015 // Marcador en frente, con z-index alto
+        });
+
+        if (place.geometry.viewport) {
+            map.fitBounds(place.geometry.viewport);
+        } else {
+            map.setCenter(place.geometry.location);
+            map.setZoom(15);
+        }
+    });
+
+    // Prevenir el envío del formulario principal al presionar Enter en #searchLocation
+    searchInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault(); // Evita que el formulario principal se envíe
+            searchBox.set('query', this.value); // Realiza la búsqueda en el SearchBox
+        }
     });
 }
 
@@ -448,19 +531,19 @@ function placeMarker(location) {
     marker = new google.maps.Marker({
         position: location,
         map: map,
-        animation: google.maps.Animation.DROP
+        animation: google.maps.Animation.DROP,
+        zIndex: 1015 // Marcador en frente, con z-index alto
     });
 
-    // Obtener dirección
     geocoder.geocode({ location: location }, (results, status) => {
         if (status === 'OK') {
             if (results[0]) {
                 document.getElementById('location').value = results[0].formatted_address;
+                document.getElementById('selected-location').textContent = results[0].formatted_address;
             }
         }
     });
 
-    // Centrar el mapa en el marcador
     map.setCenter(location);
 }
 

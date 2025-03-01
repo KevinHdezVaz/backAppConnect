@@ -11,8 +11,7 @@
                         </div>
                         <a href="{{ route('field-management.create') }}" class="btn bg-gradient-primary btn-sm mb-0" type="button">+ NUEVA CANCHA</a>
                     </div>
-                
-                    </div>
+                </div>
                 <div class="card-body px-0 pt-0 pb-2">
                     <div class="table-responsive p-0">
                         <table class="table align-items-center mb-0">
@@ -37,10 +36,39 @@
                                         <p class="text-xs font-weight-bold mb-0">{{ $field->name }}</p>
                                     </td>
                                     <td>
-                                        <p class="text-xs font-weight-bold mb-0">{{ $field->type }}</p>
+                                        <!-- Mostrar los tipos como una lista separada por comas -->
+                                        <p class="text-xs font-weight-bold mb-0">
+                                            @if($field->types)
+                                                @php
+                                                    // Si $field->types es una cadena JSON, decodifícala; si es un arreglo, úsalo directamente
+                                                    $types = is_string($field->types) ? json_decode($field->types, true) : (is_array($field->types) ? $field->types : []);
+                                                    $typeLabels = [];
+                                                    if (is_array($types) && !empty($types)) {
+                                                        foreach ($types as $type) {
+                                                            switch ($type) {
+                                                                case 'fut5':
+                                                                    $typeLabels[] = 'Fútbol 5';
+                                                                    break;
+                                                                case 'fut7':
+                                                                    $typeLabels[] = 'Fútbol 7';
+                                                                    break;
+                                                                case 'fut11':
+                                                                    $typeLabels[] = 'Fútbol 11';
+                                                                    break;
+                                                            }
+                                                        }
+                                                        echo implode(', ', $typeLabels);
+                                                    } else {
+                                                        echo 'Sin tipo';
+                                                    }
+                                                @endphp
+                                            @else
+                                                Sin tipo
+                                            @endif
+                                        </p>
                                     </td>
                                     <td>
-                                        <p class="text-xs font-weight-bold mb-0">{{ $field->location }}</p>
+                                        <p class="text-xs font-weight-bold mb-0">{{ $field->municipio }}</p>
                                     </td>
                                     <td>
                                         <p class="text-xs font-weight-bold mb-0">${{ $field->price_per_match }}</p>
@@ -51,9 +79,9 @@
                                         </span> 
                                     </td>
                                     <td class="text-center">
-                                    <a href="{{ route('field-management.edit', $field->id) }}" class="mx-1">
-    <i class="fas fa-edit text-secondary"></i>
-</a>
+                                        <a href="{{ route('field-management.edit', $field->id) }}" class="mx-1">
+                                            <i class="fas fa-edit text-secondary"></i>
+                                        </a>
                                         <form action="{{ route('field-management.destroy', $field->id) }}" method="POST" style="display: inline;">
                                             @csrf
                                             @method('DELETE')

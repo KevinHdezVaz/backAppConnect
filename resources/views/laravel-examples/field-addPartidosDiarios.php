@@ -37,7 +37,6 @@
                 </div>
             @endif
 
-
             <form action="{{ route('daily-matches.store') }}" method="POST">
                 @csrf
                 
@@ -49,6 +48,9 @@
                                 <option value="current">Esta semana ({{ now()->startOfWeek()->format('d/m/Y') }} - {{ now()->endOfWeek()->format('d/m/Y') }})</option>
                                 <option value="next">Próxima semana ({{ now()->addWeek()->startOfWeek()->format('d/m/Y') }} - {{ now()->addWeek()->endOfWeek()->format('d/m/Y') }})</option>
                             </select>
+                            @error('week_selection')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
                 </div>
@@ -60,6 +62,9 @@
                             <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" 
                                    value="{{ old('name') }}" required 
                                    placeholder="ej: Partido Matutino">
+                            @error('name')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
 
@@ -72,22 +77,28 @@
                                     <option value="{{ $field->id }}">{{ $field->name }}</option>
                                 @endforeach
                             </select>
+                            @error('field_id')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
                 </div>
 
                 <div class="row mt-4">
-
-                  <div class="col-md-6">
-    <div class="form-group">
-        <label for="game_type">Tipo de Partido</label>
-        <select name="game_type" id="game_type" class="form-control @error('game_type') is-invalid @enderror" required>
-            <option value="">Seleccionar tipo...</option>
-            <option value="fut5">Fútbol 5</option>
-            <option value="fut7">Fútbol 7</option>
-        </select>
-    </div>
-</div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="game_type">Tipo de Partido</label>
+                            <select name="game_type" id="game_type" class="form-control @error('game_type') is-invalid @enderror" required>
+                                <option value="">Seleccionar tipo...</option>
+                                <option value="fut5" {{ old('game_type') === 'fut5' ? 'selected' : '' }}>Fútbol 5</option>
+                                <option value="fut7" {{ old('game_type') === 'fut7' ? 'selected' : '' }}>Fútbol 7</option>
+                                <option value="fut11" {{ old('game_type') === 'fut11' ? 'selected' : '' }}>Fútbol 11</option>
+                            </select>
+                            @error('game_type')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
 
                     <div class="col-md-6">
                         <div class="form-group">
@@ -98,6 +109,9 @@
                                        class="form-control @error('price') is-invalid @enderror"
                                        value="{{ old('price') }}" required>
                             </div>
+                            @error('price')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
                 </div>
@@ -175,8 +189,6 @@
 </div>
 
 <script>
-
-
 document.addEventListener('DOMContentLoaded', function() {
     const weekSelector = document.getElementById('week_selection');
     const dayToggles = document.querySelectorAll('.day-toggle');

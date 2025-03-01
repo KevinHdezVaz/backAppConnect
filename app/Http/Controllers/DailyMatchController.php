@@ -24,21 +24,21 @@ class DailyMatchController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'field_id' => 'required|exists:fields,id',
-            'game_type' => 'required|in:fut5,fut7', 
+'game_type' => 'required|in:fut5,fut7,fut11',  // Ajustado para coincidir con el ENUM en equipo_partidos
             'price' => 'required|numeric|min:0',
             'week_selection' => 'required|in:current,next',
             'days' => 'required|array',
             'days.*' => 'array'
         ]);
-
-        \Log::info('Validación pasada correctamente');
+ 
+        \Log::info('Validación pasada correctamente', ['game_type' => $request->game_type]);
         DB::beginTransaction();
         
         try {
             // Determinar la semana seleccionada
 
-            $playersPerTeam = $request->game_type === 'fut5' ? 5 : 7;
-            $totalPlayers = $playersPerTeam ;
+            $playersPerTeam = $request->game_type === 'fut5' ? 5 : ($request->game_type === 'fut7' ? 7 : 11);
+                                                            $totalPlayers = $playersPerTeam ;
 
             $startOfWeek = now()->startOfWeek();
             if ($request->week_selection === 'next') {
@@ -91,7 +91,8 @@ class DailyMatchController extends Controller
                     \Log::info('Verificando disponibilidad', [
                         'fecha' => $dayDate->format('Y-m-d'),
                         'hora_inicio' => $startTime->format('H:i'),
-                        'hora_fin' => $endTime->format('H:i')
+                        'hora_fin' => $endTime->format('H:i'),
+                        'game_type' => $request->game_type
                     ]);
 
                     // Verificar si ya existe una reserva
@@ -132,6 +133,23 @@ class DailyMatchController extends Controller
                         $errores[] = "Ya existe un partido el {$dayDate->format('d/m/Y')} a las {$hour}";
                         continue;
                     }
+
+                    // Obtener los tipos de la cancha seleccionada
+                    $field = Field::findOrFail($request->field_id);
+                    \Log::debug('Tipos de la cancha:', ['types' => $field->types]);
+
+                    $fieldTypes = json_decode($field->types, true) ?? [];
+                    \Log::debug('Field types decodificados:', ['fieldTypes' => $fieldTypes]);
+
+                    // Verificar si el game_type es válido para esta cancha
+                    if (!in_array($request->game_type, $fieldTypes)) {
+                        \Log::error('Tipo de partido inválido para la cancha', [
+                            'game_type' => $request->game_type,
+                            'field_types' => $fieldTypes
+                        ]);
+                        throw new \Exception('El tipo de partido seleccionado no es válido para esta cancha.');
+                    }
+                    
 
                     try {
                         $partido = DailyMatch::create([
