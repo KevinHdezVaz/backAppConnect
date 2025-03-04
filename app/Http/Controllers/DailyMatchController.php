@@ -295,24 +295,29 @@ public function index()
     {
         \Log::info('Accediendo a getAvailableMatches');
         
-        $now = now(); // Fecha y hora actual, ej. 2025-02-21 00:25
+        $now = now();
         $today = $now->format('Y-m-d');
         \Log::info('Fecha y hora actual', ['now' => $now->toDateTimeString()]);
         
-        $matches = DailyMatch::with(['field', 'teams'])
+        $matches = DailyMatch::with([
+                'field',
+                'teams' => function ($query) {
+                    $query->with(['players.user' => function ($query) {
+                        $query->limit(3); // Limitar a 3 jugadores por equipo
+                    }])->withCount('players'); // Contar todos los jugadores
+                }
+            ])
             ->where(function ($query) use ($now) {
-                $query->where('schedule_date', '>', $now->format('Y-m-d')) // Días futuros
+                $query->where('schedule_date', '>', $now->format('Y-m-d'))
                       ->orWhere(function ($query) use ($now) {
-                          $query->where('schedule_date', $now->format('Y-m-d')) // Día actual
-                                ->where('start_time', '>=', $now->format('H:i:s')); // Partidos no iniciados
+                          $query->where('schedule_date', $now->format('Y-m-d'))
+                                ->where('start_time', '>=', $now->format('H:i:s'));
                       });
             })
             ->where('status', 'open')
             ->orderBy('schedule_date')
             ->orderBy('start_time')
             ->get();
-        
- 
         
         return response()->json([
             'matches' => $matches

@@ -37,15 +37,65 @@
                     </div>
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="types">Tipos de Cancha</label>
-                            <select name="types[]" class="form-control @error('types') is-invalid @enderror" multiple required>
-                                <option value="fut5" {{ in_array('fut5', json_decode($field->types ?? '[]', true)) ? 'selected' : '' }}>Fútbol 5</option>
-                                <option value="fut7" {{ in_array('fut7', json_decode($field->types ?? '[]', true)) ? 'selected' : '' }}>Fútbol 7</option>
-                                <option value="fut11" {{ in_array('fut11', json_decode($field->types ?? '[]', true)) ? 'selected' : '' }}>Fútbol 11</option>
-                            </select>
+                            <label>Tipos de Cancha</label>
+                            <div class="row">
+                                @php
+                                    $types = json_decode($field->types ?? '[]', true);
+                                @endphp
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="types[]" value="fut5"
+                                               {{ in_array('fut5', $types ?? []) ? 'checked' : '' }}>
+                                        <label class="form-check-label">Fútbol 5</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="types[]" value="fut7"
+                                               {{ in_array('fut7', $types ?? []) ? 'checked' : '' }}>
+                                        <label class="form-check-label">Fútbol 7</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="types[]" value="fut11"
+                                               {{ in_array('fut11', $types ?? []) ? 'checked' : '' }}>
+                                        <label class="form-check-label">Fútbol 11</label>
+                                    </div>
+                                </div>
+                            </div>
                             @error('types')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
+                            <!-- Mostrar los tipos seleccionados como texto legible -->
+                            <div class="mt-2 text-muted" id="types-display">
+                                @php
+                                    $typesArray = json_decode($field->types ?? '[]', true);
+                                    if (!empty($typesArray)) {
+                                        $typeNames = [];
+                                        foreach ($typesArray as $type) {
+                                            switch ($type) {
+                                                case 'fut5':
+                                                    $typeNames[] = 'Fútbol 5';
+                                                    break;
+                                                case 'fut7':
+                                                    $typeNames[] = 'Fútbol 7';
+                                                    break;
+                                                case 'fut11':
+                                                    $typeNames[] = 'Fútbol 11';
+                                                    break;
+                                            }
+                                        }
+                                        if (count($typeNames) > 1) {
+                                            echo 'Tipos seleccionados: ' . implode(' y ', $typeNames);
+                                        } else {
+                                            echo 'Tipo seleccionado: ' . (isset($typeNames[0]) ? $typeNames[0] : 'Ninguno');
+                                        }
+                                    } else {
+                                        echo 'Ningún tipo seleccionado';
+                                    }
+                                @endphp
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -174,10 +224,12 @@
                 </div>
 
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" name="is_active" {{ $field->is_active ? 'checked' : '' }}>
-                    <label class="form-check-label">Cancha Activa</label>
-                </div>
-
+    <input class="form-check-input" type="checkbox" name="is_active" {{ $field->is_active ? 'checked' : '' }}>
+    <label class="form-check-label">Cancha Activa</label>
+    @error('is_active')
+        <div class="invalid-feedback">{{ $message }}</div>
+    @enderror
+</div>
                 <div class="d-flex justify-content-end mt-4">
                     <a href="{{ route('field-management') }}" class="btn btn-light m-0">Cancelar</a>
                     <button type="submit" class="btn bg-gradient-primary m-0 ms-2">Actualizar Cancha</button>
@@ -373,6 +425,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Inicializar los horarios al cargar la página
     updateAvailableHours();
+
+    // Actualizar la visualización de los tipos seleccionados al cambiar los checkboxes
+    const typeCheckboxes = document.querySelectorAll('input[name="types[]"]');
+    const typesDisplay = document.getElementById('types-display');
+
+    function updateTypesDisplay() {
+        const selectedTypes = Array.from(typeCheckboxes)
+            .filter(checkbox => checkbox.checked)
+            .map(checkbox => checkbox.nextElementSibling.textContent.trim());
+
+        if (selectedTypes.length === 0) {
+            typesDisplay.textContent = 'Ningún tipo seleccionado';
+        } else if (selectedTypes.length === 1) {
+            typesDisplay.textContent = 'Tipo seleccionado: ' + selectedTypes[0];
+        } else {
+            typesDisplay.textContent = 'Tipos seleccionados: ' + selectedTypes.slice(0, -1).join(', ') + ' y ' + selectedTypes[selectedTypes.length - 1];
+        }
+    }
+
+    typeCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateTypesDisplay);
+    });
+
+    updateTypesDisplay(); // Llamar inicialmente para mostrar los tipos seleccionados
 });
 </script>
 @endsection

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Field;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class FieldManagementController extends Controller
@@ -48,29 +50,28 @@ class FieldManagementController extends Controller
     {
         \Log::debug('Datos recibidos:', $request->all());
         try {
-            // Validar los datos de entrada
             $validated = $request->validate([
                 'name' => 'required|string',
                 'description' => 'required|string',
                 'price_per_match' => 'required|numeric',
-                'types' => 'required|array|min:1', // Validar que al menos se seleccione un tipo
-                'types.*' => 'in:fut5,fut7,fut11', // Validar que los tipos sean válidos
+                'types' => 'required|array|min:1',
+                'types.*' => 'in:fut5,fut7,fut11',
                 'latitude' => 'nullable|numeric',
                 'municipio' => 'required|string',
                 'longitude' => 'nullable|numeric',
                 'is_active' => 'sometimes',
                 'amenities' => 'nullable|array',
-                'available_hours' => 'required|string',
+                'available_hours' => 'required|string', // Viene como JSON del frontend
                 'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048'
             ]);
-            
-            // Verificar si available_hours es una cadena JSON válida
-            $availableHours = is_string($request->available_hours) ? json_decode($request->available_hours, true) : $request->available_hours;
-            if (json_last_error() !== JSON_ERROR_NONE && is_string($request->available_hours)) {
+    
+            // Decodificar available_hours para validar su formato
+            $availableHours = json_decode($request->input('available_hours'), true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
                 throw new \Exception('Error en el formato de available_hours: ' . json_last_error_msg());
             }
-            
-            // Preparar los datos
+    
+            // Preparar los datos sin volver a codificar innecesariamente
             $validatedData = [
                 'name' => $validated['name'],
                 'description' => $validated['description'],
@@ -79,11 +80,11 @@ class FieldManagementController extends Controller
                 'latitude' => $validated['latitude'] ?? null,
                 'longitude' => $validated['longitude'] ?? null,
                 'is_active' => $request->has('is_active') ? 1 : 0,
-                'types' => json_encode($validated['types'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), // Codificar types como JSON
-                'available_hours' => is_array($availableHours) ? json_encode($availableHours, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : $availableHours,
-                'amenities' => json_encode($request->input('amenities', []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                'types' => json_encode($validated['types']),
+                'available_hours' => $request->input('available_hours'), // Usar directamente el JSON válido
+                'amenities' => json_encode($request->input('amenities', []))
             ];
-            
+    
             // Procesar imágenes
             if ($request->hasFile('images')) {
                 $imagePaths = [];
@@ -91,10 +92,9 @@ class FieldManagementController extends Controller
                     $path = $image->store('fields', 'public');
                     $imagePaths[] = Storage::url($path);
                 }
-                $validatedData['images'] = json_encode($imagePaths, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $validatedData['images'] = json_encode($imagePaths);
             }
-            
-            // Crear la cancha
+    
             $field = Field::create($validatedData);
             return redirect()->route('field-management')->with('success', 'Cancha creada exitosamente');
         } catch (\Exception $e) {
@@ -107,86 +107,125 @@ class FieldManagementController extends Controller
             return redirect()->back()->withInput()->withErrors(['error' => 'Error al crear la cancha: ' . $e->getMessage()]);
         }
     }
-
     public function update(Request $request, $id)
     {
+        Log::info('Datos recibidos en update para field_id: ' . $id, $request->all());
         $field = Field::findOrFail($id);
-
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'types' => 'required|array', // Validar que types sea un arreglo
-            'types.*' => 'in:fut5,fut7,fut11', // Validar que cada tipo sea válido
-            'description' => 'required|string',
-            'municipio' => 'required|string|max:255',
-            'price_per_match' => 'required|numeric|min:0',
-            'latitude' => 'nullable|numeric',
-            'longitude' => 'nullable|numeric',
-            'amenities' => 'nullable|array',
-            'amenities.*' => 'in:Vestuarios,Estacionamiento,Iluminación nocturna',
-            'available_hours' => 'nullable|json',
-            'images' => 'nullable|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
-            'is_active' => 'boolean',
-        ]);
-
-        // Preparar los datos para la actualización
-        $data = $request->only([
-            'name', 'description', 'municipio', 'price_per_match', 'latitude', 
-            'longitude', 'is_active'
-        ]);
-
-        // Manejar los tipos (types) como un arreglo JSON
-        if ($request->has('types')) {
-            $data['types'] = json_encode($request->input('types'));
-        }
-
-        // Manejar amenities como un arreglo JSON
-        if ($request->has('amenities')) {
-            $data['amenities'] = json_encode($request->input('amenities'));
-        }
-
-        // Manejar available_hours como JSON (ya viene en el request como JSON)
-        if ($request->has('available_hours')) {
-            $data['available_hours'] = $request->input('available_hours');
-        }
-
-        // Manejar imágenes existentes y nuevas
-        if ($request->has('existing_images')) {
-            $existingImages = $request->input('existing_images');
-            $data['images'] = json_encode($existingImages);
-        }
-
-        if ($request->hasFile('images')) {
-            $newImages = [];
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('fields', 'public');
-                $newImages[] = "/storage/$path";
+    
+        try {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'types' => 'required|array',
+                'types.*' => 'in:fut5,fut7,fut11',
+                'description' => 'required|string',
+                'municipio' => 'required|string|max:255',
+                'price_per_match' => 'required|numeric|min:0',
+                'latitude' => 'nullable|numeric',
+                'longitude' => 'nullable|numeric',
+                'amenities' => 'nullable|array',
+                'amenities.*' => 'in:Vestuarios,Estacionamiento,Iluminación nocturna',
+                'available_hours' => 'nullable|string', // Viene como JSON del frontend
+                'images' => 'nullable|array',
+                'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+            ]);
+    
+            $data = $request->only([
+                'name', 'description', 'municipio', 'price_per_match', 'latitude',
+                'longitude'
+            ]);
+    
+            if ($request->has('types')) {
+                $data['types'] = json_encode($request->input('types'));
             }
-            if (isset($data['images'])) {
-                $currentImages = json_decode($data['images'], true) ?? [];
+    
+            if ($request->has('amenities')) {
+                $data['amenities'] = json_encode($request->input('amenities'));
+            }
+    
+            // Manejar available_hours
+            if ($request->has('available_hours')) {
+                $hours = json_decode($request->input('available_hours'), true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    throw new \Exception('Formato JSON inválido para available_hours');
+                }
+                $data['available_hours'] = $request->input('available_hours'); // Usar directamente el JSON válido
+                Log::info('Available hours procesados: ' . $data['available_hours']);
+            }
+    
+            // Manejar imágenes
+            if ($request->has('existing_images')) {
+                $data['images'] = json_encode($request->input('existing_images'));
+            }
+    
+            if ($request->hasFile('images')) {
+                $newImages = [];
+                foreach ($request->file('images') as $image) {
+                    $path = $image->store('fields', 'public');
+                    $newImages[] = "/storage/$path";
+                }
+                $currentImages = json_decode($data['images'] ?? $field->images ?? '[]', true) ?? [];
                 $data['images'] = json_encode(array_merge($currentImages, $newImages));
-            } else {
-                $data['images'] = json_encode($newImages);
             }
+    
+            if ($request->has('removed_images')) {
+                $removedImages = json_decode($request->input('removed_images'), true) ?? [];
+                $currentImages = json_decode($field->images ?? '[]', true) ?? [];
+                $remainingImages = array_diff($currentImages, $removedImages);
+                $data['images'] = json_encode(array_values($remainingImages));
+            }
+    
+            $data['is_active'] = $request->has('is_active') ? 1 : 0;
+    
+            $field->update($data);
+            return redirect()->route('field-management')->with('success', 'Cancha actualizada exitosamente');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Error de validación al actualizar cancha: ' . $e->getMessage(), $e->errors());
+            return redirect()->back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar cancha: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error al actualizar la cancha: ' . $e->getMessage())->withInput();
         }
-
-        // Manejar imágenes eliminadas
-        if ($request->has('removed_images')) {
-            $removedImages = json_decode($request->input('removed_images'), true) ?? [];
-            $currentImages = json_decode($field->images ?? '[]', true) ?? [];
-            $remainingImages = array_diff($currentImages, $removedImages);
-            $data['images'] = json_encode(array_values($remainingImages));
-        }
-
-        $field->update($data);
-
-        return redirect()->route('field-management')->with('success', 'Cancha actualizada exitosamente');
     }
 
     public function destroy($id)
     {
-        $field = Field::findOrFail($id);
-        $field->delete();
-        return redirect()->route('field-management')->with('success', 'Cancha eliminada exitosamente');
+        try {
+            // Buscar la cancha con sus relaciones
+            $field = Field::with([
+                'equipoPartidos.ratings',  // ratings está en DailyMatch
+                'equipoPartidos.teams',    // teams está en DailyMatch y EquipoPartido
+                'equipoPartidos.players',  // players está en DailyMatch
+                'bookings'
+            ])->findOrFail($id);
+
+            // Usar una transacción para asegurar consistencia
+            DB::transaction(function () use ($field) {
+                // 1. Eliminar las relaciones de los partidos
+                foreach ($field->equipoPartidos as $partido) {
+                    $partido->ratings()->delete();   // Elimina match_ratings
+                    $partido->teams()->delete();     // Elimina match_teams
+                    $partido->players()->delete();   // Elimina match_players
+                }
+
+                // 2. Eliminar los partidos (equipo_partidos)
+                $field->equipoPartidos()->delete();
+
+                // 3. Eliminar las reservaciones (bookings)
+                $field->bookings()->delete();
+
+                // 4. Eliminar la cancha
+                $field->delete();
+            });
+
+            return redirect()->route('field-management')
+                ->with('success', 'Cancha y todos sus registros relacionados eliminados exitosamente');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar cancha:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->route('field-management')
+                ->with('error', 'Error al eliminar la cancha: ' . $e->getMessage());
+        }
     }
 }

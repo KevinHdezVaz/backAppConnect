@@ -406,6 +406,7 @@ document.addEventListener('DOMContentLoaded', function () {
     hiddenInput.value = JSON.stringify(availableHours); // Convertir a JSON una vez
 }
 
+
     // Inicializar los horarios al cargar la página
     updateAvailableHours();
 });
