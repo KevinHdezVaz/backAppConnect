@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use App\Models\Order;
 use App\Models\Equipo;
+use App\Models\UserBono;
 use App\Models\MatchTeam;
 use App\Models\DailyMatch;
 use App\Models\DeviceToken;
@@ -485,93 +486,126 @@ class MatchPlayersController extends Controller
               \Log::info('Iniciando proceso de unión al equipo', [
                   'request_data' => $request->all()
               ]);
-  
+      
               $validated = $request->validate([
                   'match_id' => 'required|exists:equipo_partidos,id',
                   'equipo_partido_id' => 'required|exists:match_teams,id',
                   'position' => 'required|string',
                   'use_wallet' => 'boolean',
+                  'use_bono_id' => 'nullable|exists:user_bonos,id', // Nuevo campo opcional
               ]);
-  
+      
               $existingPlayer = MatchTeamPlayer::whereHas('team', function($query) use ($validated) {
                   $query->where('equipo_partido_id', $validated['match_id']);
               })->where('user_id', auth()->id())->first();
-  
+      
               if ($existingPlayer) {
                   return response()->json([
                       'message' => 'Ya estás registrado en este partido'
                   ], 422);
               }
-  
+      
               $team = MatchTeam::findOrFail($validated['equipo_partido_id']);
               if ($team->player_count >= $team->max_players) {
                   return response()->json([
                       'message' => 'El equipo está lleno'
                   ], 422);
               }
-  
+      
               $match = EquipoPartido::findOrFail($validated['match_id']);
               $price = floatval($match->price ?? 0);
               $useWallet = $request->input('use_wallet', false);
+              $useBonoId = $request->input('use_bono_id', null);
               $amountToPay = $price;
-  
-              return DB::transaction(function() use ($validated, $team, $match, $price, $useWallet) {
+              $paymentMethod = null;
+      
+              return DB::transaction(function() use ($validated, $team, $match, $price, $useWallet, $useBonoId, &$paymentMethod) {
                   $paymentId = null;
-  
+      
                   if ($price > 0) {
-                      if ($useWallet) {
+                      if ($useBonoId) {
+                          // Verificar si el bono es válido
+                          $userBono = UserBono::where('id', $useBonoId)
+                              ->where('user_id', auth()->id())
+                              ->where('estado', 'activo')
+                              ->where('fecha_vencimiento', '>=', now())
+                              ->first();
+      
+                          if (!$userBono) {
+                              throw new \Exception('El bono especificado no es válido o no está disponible');
+                          }
+      
+                          if ($userBono->usos_disponibles !== null && $userBono->usos_disponibles <= 0) {
+                              throw new \Exception('El bono no tiene usos disponibles');
+                          }
+      
+                          // Usar el bono
+                          if ($userBono->usos_disponibles !== null) {
+                              $userBono->decrement('usos_disponibles');
+                          }
+                          $paymentMethod = 'bono';
+                          $paymentId = $userBono->id; // Usamos el ID del bono como referencia
+                          $amountToPay = 0;
+      
+                          \Log::info('Bono utilizado para unirse al equipo', [
+                              'user_id' => auth()->id(),
+                              'bono_id' => $userBono->id,
+                              'usos_restantes' => $userBono->usos_disponibles
+                          ]);
+                      } elseif ($useWallet) {
                           $wallet = auth()->user()->wallet;
                           if (!$wallet || $wallet->balance < $price) {
                               throw new \Exception('Saldo insuficiente en el monedero');
                           }
-  
+      
                           $this->walletService->withdraw(
                               auth()->user(),
                               $price,
                               "Pago para unirse al equipo {$team->name} en partido #{$match->id}"
                           );
+                          $paymentMethod = 'wallet';
+                          $amountToPay = 0;
+      
                           \Log::info('Saldo deducido del monedero', [
                               'user_id' => auth()->id(),
                               'amount' => $price,
                               'new_balance' => auth()->user()->wallet->balance
                           ]);
-                          $amountToPay = 0;
                       } else {
                           throw new \Exception('El pago con MercadoPago no está implementado aún');
                       }
                   }
-  
+      
                   $player = MatchTeamPlayer::create([
                       'match_team_id' => $validated['equipo_partido_id'],
                       'user_id' => auth()->id(),
                       'position' => $validated['position'],
                       'payment_id' => $paymentId,
                   ]);
-  
+      
                   $team->increment('player_count');
-  
+      
                   // Verificar si es el primer partido del usuario y tiene un referred_by
                   $user = auth()->user();
                   $matchCount = MatchTeamPlayer::where('user_id', $user->id)->count();
                   if ($matchCount == 1 && $user->referred_by) {
                       $referrer = User::find($user->referred_by);
                       if ($referrer) {
-                          // Otorgar 350 UYU a ambos
                           $this->walletService->deposit($user, 350, "Bonificación por primer partido con referido de #{$referrer->id}");
                           $this->walletService->deposit($referrer, 350, "Bonificación por primer partido de referido #{$user->id}");
-  
+      
                           \Log::info('Bonificación de 350 UYU aplicada por primer partido con referido', [
                               'user_id' => $user->id,
                               'referrer_id' => $referrer->id,
                           ]);
                       }
                   }
-  
+      
                   $allTeams = MatchTeam::where('equipo_partido_id', $match->id)->get();
                   $allTeamsFull = $allTeams->every(function($team) {
                       return $team->player_count >= $team->max_players;
                   });
-  
+      
                   if ($allTeamsFull) {
                       $match->update(['status' => 'full']);
                       $matchStartTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->start_time);
@@ -581,7 +615,7 @@ class MatchPlayersController extends Controller
                           'scheduled_at' => $matchStartTime,
                           'message' => 'Tu partido está por comenzar'
                       ]);
-  
+      
                       $matchEndTime = Carbon::createFromFormat('Y-m-d H:i:s', $match->schedule_date . ' ' . $match->end_time);
                       NotificationEvent::create([
                           'equipo_partido_id' => $match->id,
@@ -589,13 +623,13 @@ class MatchPlayersController extends Controller
                           'scheduled_at' => $matchEndTime,
                           'message' => '¡El partido ha terminado! Califica a tus compañeros'
                       ]);
-  
+      
                       $playerIds = DeviceToken::whereHas('user', function($query) use ($match) {
                           $query->whereHas('matchTeamPlayers.team', function($q) use ($match) {
                               $q->where('equipo_partido_id', $match->id);
                           });
                       })->pluck('player_id')->toArray();
-  
+      
                       if (!empty($playerIds)) {
                           $notificationController = app(NotificationController::class);
                           $notificationController->sendOneSignalNotification(
@@ -609,7 +643,7 @@ class MatchPlayersController extends Controller
                           ->where('user_id', '!=', auth()->id())
                           ->pluck('player_id')
                           ->toArray();
-  
+      
                       if (!empty($playerIds)) {
                           $notificationController = app(NotificationController::class);
                           $notificationController->sendOneSignalNotification(
@@ -619,14 +653,14 @@ class MatchPlayersController extends Controller
                           );
                       }
                   }
-  
+      
                   return response()->json([
                       'message' => 'Te has unido al equipo exitosamente',
-                      'used_wallet' => $useWallet && $price > 0,
+                      'payment_method' => $paymentMethod,
                       'amount_paid' => $price,
                   ]);
               });
-  
+      
           } catch (\Exception $e) {
               \Log::error('Error al unirse al equipo: ' . $e->getMessage());
               \Log::error($e->getTraceAsString());
