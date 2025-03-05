@@ -112,7 +112,7 @@ Route::post('/matches/{matchId}/comments', [CommentController::class, 'store']);
     Route::post('matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
      Route::get('matches/{match}/teams', [DailyMatchController::class, 'getMatchTeams']);
     Route::get('/daily-matches', [DailyMatchController::class, 'getAvailableMatches']);
-    Route::post('/daily-matches/{match}/join', [DailyMatchController::class, 'joinMatch']);
+     Route::post('/daily-matches/{match}/join', [DailyMatchController::class, 'joinMatch']);
     Route::post('/daily-matches/{match}/leave', [DailyMatchController::class, 'leaveMatch']);
     Route::get('/daily-matches/{match}/players', [DailyMatchController::class, 'getMatchPlayers']);
     
@@ -209,3 +209,4 @@ Route::post('/check-phone', [AuthController::class, 'checkPhone']);
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
 Route::post('login/google', [AuthController::class, 'loginWithGoogle']);
+Route::get('/daily-matches/index', [DailyMatchController::class, 'index'])->name('daily-matches.index');

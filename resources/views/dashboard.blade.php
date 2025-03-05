@@ -1,4 +1,5 @@
 @extends('layouts.user_type.auth')
+
 @section('content')
   <div class="row">
     <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
@@ -62,7 +63,63 @@
       </div>
     </div>
   </div>
+
+  <!-- Nueva sección para mostrar partidos -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header pb-0">
+          <h6>Lista de Partidos Diarios</h6>
+          <p class="text-sm">Todos los partidos disponibles y completos</p>
+        </div>
+        <div class="card-body p-3">
+          <div class="table-responsive">
+            <table class="table align-items-center mb-0">
+              <thead>
+                <tr>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Nombre</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Cancha</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Hora</th>
+                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                @forelse ($matches as $match)
+                  <tr class="{{ $match->status == 'full' ? 'bg-light text-muted' : '' }}">
+                    <td>
+                      <span class="text-xs font-weight-bold">{{ $match->name }}</span>
+                    </td>
+                    <td>
+                      <span class="text-xs font-weight-bold">{{ $match->field->name ?? 'Sin cancha' }}</span>
+                    </td>
+                    <td>
+                      <span class="text-xs font-weight-bold">{{ $match->schedule_date->format('d/m/Y') }}</span>
+                    </td>
+                    <td>
+                      <span class="text-xs font-weight-bold">{{ $match->start_time }} - {{ $match->end_time }}</span>
+                    </td>
+                     
+                    <td>
+                      <span class="badge badge-sm {{ $match->status == 'full' ? 'bg-secondary' : 'bg-success' }}">
+                        {{ $match->status == 'full' ? 'Completo' : 'Disponible' }}
+                      </span>
+                    </td>
+                  </tr>
+                @empty
+                  <tr>
+                    <td colspan="6" class="text-center">No hay partidos disponibles</td>
+                  </tr>
+                @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 @endsection
+
 @push('dashboard')
 <script>
 window.onload = function() {
