@@ -1,14 +1,16 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Equipo;
-use App\Models\DailyMatch; // Añade el modelo DailyMatch
+use App\Models\DailyMatch;
+use App\Models\Field;
 
 class HomeController extends Controller
 {
-    public function home()
+    public function home(Request $request)
     {
         $monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         
@@ -32,11 +34,38 @@ class HomeController extends Controller
             return $monthlyTeams[$month] ?? 0;
         }, range(1, 12));
 
-        // Cargar todos los partidos diarios
+        $matchesByDay = DailyMatch::selectRaw('DATE(schedule_date) as date, COUNT(*) as count')
+            ->whereBetween('schedule_date', [now()->startOfWeek(), now()->endOfWeek()])
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        $totalFields = Field::count();
+        $occupiedFields = DailyMatch::whereDate('schedule_date', now()->today())->distinct('field_id')->count('field_id');
+        $occupationPercentage = $totalFields ? ($occupiedFields / $totalFields) * 100 : 0;
+
+        $matchesPlayedThisMonth = DailyMatch::whereMonth('schedule_date', now()->month)->count();
+
         $matches = DailyMatch::with(['field', 'teams'])
+            ->when($request->date, function ($query) use ($request) {
+                $query->whereDate('schedule_date', $request->date);
+            })
+            ->when($request->status, function ($query) use ($request) {
+                $query->where('status', $request->status);
+            })
             ->orderBy('schedule_date', 'desc')
             ->orderBy('start_time', 'asc')
+            ->paginate(10);
+
+        $upcomingMatches = DailyMatch::with(['field', 'teams'])
+            ->whereDate('schedule_date', '>=', now()->today())
+            ->whereDate('schedule_date', '<=', now()->tomorrow())
+            ->orderBy('schedule_date', 'asc')
+            ->orderBy('start_time', 'asc')
+            ->take(5)
             ->get();
+
+        $fields = Field::all(); // Para el mapa (opcional)
 
         return view('dashboard', [
             'newUsersCount' => User::whereMonth('created_at', now()->month)->count(),
@@ -44,7 +73,12 @@ class HomeController extends Controller
             'monthLabels' => $monthLabels,
             'userData' => $userData,
             'teamData' => $teamData,
-            'matches' => $matches // Añadir los partidos a la vista
+            'matchesByDay' => $matchesByDay,
+            'occupationPercentage' => $occupationPercentage,
+            'matchesPlayedThisMonth' => $matchesPlayedThisMonth,
+            'matches' => $matches,
+            'upcomingMatches' => $upcomingMatches,
+            'fields' => $fields,
         ]);
     }
 }

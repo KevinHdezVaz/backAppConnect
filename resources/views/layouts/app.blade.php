@@ -28,6 +28,8 @@
   <!-- CSS Files -->
   <link id="pagestyle" href="{{ asset('assets/css/soft-ui-dashboard.css?v=1.0.3') }}" rel="stylesheet" />
   <!-- Font Awesome -->
+
+  
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <!-- Google Maps API con async -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD6CjQZhv6WK71XEsLlm3fRRxbNGBygj-g&libraries=places" async></script>
@@ -69,6 +71,11 @@
     }
   </script>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Flatpickr -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <!-- Github buttons -->
   <script async defer src="https://buttons.github.io/buttons.js"></script>
   <!-- Control Center for Soft Dashboard -->

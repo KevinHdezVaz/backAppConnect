@@ -3,6 +3,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
 use App\Http\Controllers\StoryController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
@@ -67,7 +68,7 @@ Route::get('/partido/{id}', function ($id) {
 
 // Rutas protegidas para admin
 Route::middleware(['auth:admin'])->group(function () {
-    Route::get('/', [HomeController::class, 'home']);
+    Route::get('/', [HomeController::class, 'home'])->name('home');
     Route::get('/dashboard', [HomeController::class, 'home'])->name('dashboard');   
 
     Route::get('/stories', [StoryController::class, 'index'])->name('admin.stories.index');
@@ -80,10 +81,9 @@ Route::middleware(['auth:admin'])->group(function () {
     Route::get('/daily-matches/create', [DailyMatchController::class, 'create'])->name('daily-matches.create');
     Route::post('/daily-matches', [DailyMatchController::class, 'store'])->name('daily-matches.store');
     Route::get('/daily-matches', [DailyMatchController::class, 'index'])->name('daily-matches.index');
+ 
 
-    Route::get('/billing', function () {
-        return view('billing');
-    })->name('billing');
+    Route::get('/billing', [BillingController::class, 'index'])->name('payments'); // Nueva ruta para pagos
     
     Route::get('/profile', function () {
         return view('profile');
