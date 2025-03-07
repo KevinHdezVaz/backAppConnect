@@ -3,6 +3,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
 use App\Http\Controllers\StoryController;
+use App\Http\Controllers\BannerController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
@@ -83,6 +84,13 @@ Route::middleware(['auth:admin'])->group(function () {
     Route::get('/daily-matches', [DailyMatchController::class, 'index'])->name('daily-matches.index');
  
 
+    Route::get('/banner', [BannerController::class, 'index'])->name('banner.index');
+    Route::get('/banner/create', [BannerController::class, 'create'])->name('banner.create');
+    Route::post('/banner', [BannerController::class, 'store'])->name('banner.store');
+    Route::delete('/banner/{id}', [BannerController::class, 'destroy'])->name('banner.destroy');
+
+    
+    
     Route::get('/billing', [BillingController::class, 'index'])->name('payments'); // Nueva ruta para pagos
     
     Route::get('/profile', function () {

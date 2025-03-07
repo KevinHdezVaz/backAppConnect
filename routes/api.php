@@ -21,6 +21,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\API\ChatMensajeController;
 use App\Http\Middleware\ValidateMercadoPagoWebhook;
+use App\Http\Controllers\CarouselImageController;
 use App\Http\Controllers\API\NotificationApiController;
 
 
@@ -41,7 +42,7 @@ Route::post('/payments/webhook', [MercadoPagoController::class, 'handleWebhook']
 Route::get('webhook/test', [WebhookController::class, 'test']);
 Route::post('webhook/mercadopago', [WebhookController::class, 'handleMercadoPago']);
 
-
+Route::get('/carousel-images', [CarouselImageController::class, 'index']); // Fuera del middleware
 
 
  //ruta para equipo
@@ -62,8 +63,7 @@ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
     Route::post('/bonos/usar', [BonoController::class, 'usarBono']);
     Route::put('/bonos/cancelar/{userBono}', [BonoController::class, 'cancelarBono']);
     Route::post('/bonos/verificar-codigo', [BonoController::class, 'verificarCodigo']);
-
-
+ 
     Route::prefix('payments')->group(function () {
         Route::post('create-preference', [PaymentController::class, 'createPreference']);
         Route::get('success', [PaymentController::class, 'success'])->name('payments.success');
