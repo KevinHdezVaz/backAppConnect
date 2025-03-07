@@ -128,17 +128,17 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @php
-                                    $days = [
-                                        'lunes' => 'Lunes',
-                                        'martes' => 'Martes',
-                                        'miercoles' => 'Miércoles',
-                                        'jueves' => 'Jueves',
-                                        'viernes' => 'Viernes',
-                                        'sabado' => 'Sábado',
-                                        'domingo' => 'Domingo'
-                                    ];
-
+                            @php
+    $days = [
+        'domingo' => 'Domingo',
+        'lunes' => 'Lunes',
+        'martes' => 'Martes',
+        'miercoles' => 'Miércoles',
+        'jueves' => 'Jueves',
+        'viernes' => 'Viernes',
+        'sabado' => 'Sábado'
+    ];
+ 
                                     $hours = [];
                                     for($i = 10; $i <= 19; $i++) {
                                         $hours[] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
@@ -189,21 +189,23 @@
 </div>
 
 <script>
+
+    
 document.addEventListener('DOMContentLoaded', function() {
     const weekSelector = document.getElementById('week_selection');
     const dayToggles = document.querySelectorAll('.day-toggle');
 
     function updateDaysAvailability() {
         const isNextWeek = weekSelector.value === 'next';
-        const today = new Date();
-        
+        const now = new Date(); // Obtener la fecha y hora actual
+        const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Solo fecha actual, sin hora
+        const currentHour = now.getHours(); // Obtener la hora actual (0-23)
+
         dayToggles.forEach(toggle => {
             const dayName = toggle.dataset.day;
-            let dayDate = new Date();
-            
-            // Ajustar al inicio de la semana
-            dayDate.setDate(dayDate.getDate() - dayDate.getDay()); // Ir al domingo
-            
+            let dayDate = new Date(now); // Clonar la fecha actual
+
+            // Mapa de días de la semana (0 = domingo, 1 = lunes, etc.)
             const dayMap = {
                 'domingo': 0,
                 'lunes': 1,
@@ -213,18 +215,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 'viernes': 5,
                 'sabado': 6
             };
-            
+
+            // Ajustar al inicio de la semana (domingo)
+            dayDate.setDate(dayDate.getDate() - dayDate.getDay()); // Ir al domingo
             // Avanzar al día correspondiente
             dayDate.setDate(dayDate.getDate() + dayMap[dayName]);
-            
+
+            // Ajustar para la próxima semana si es necesario
             if (isNextWeek) {
                 dayDate.setDate(dayDate.getDate() + 7);
-                toggle.disabled = false;
+                toggle.disabled = false; // Todos los días de la próxima semana deben estar habilitados
             } else {
-                // Para la semana actual, solo deshabilitar días anteriores
-                const todayWithoutTime = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                // Para la semana actual, deshabilitar días anteriores
                 const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
-                toggle.disabled = dayDateWithoutTime < todayWithoutTime;
+                toggle.disabled = dayDateWithoutTime < currentDate;
             }
 
             if (toggle.disabled) {
@@ -233,9 +237,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (hoursContainer) {
                     hoursContainer.style.display = 'none';
                 }
+            } else {
+                // Si el día está habilitado, deshabilitar los horarios pasados solo para el día actual
+                const hoursContainer = document.getElementById(`hours-${dayName}`);
+                if (hoursContainer) {
+                    const hourCheckboxes = hoursContainer.querySelectorAll('.hour-checkbox');
+                    const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()); // Definir aquí para uso local
+                    const isToday = dayDateWithoutTime.getTime() === currentDate.getTime(); // Comparar si es el día actual
+
+                    hourCheckboxes.forEach(checkbox => {
+                        const hourValue = checkbox.value; // Ejemplo: "10:00", "11:00", etc.
+                        const [hour] = hourValue.split(':').map(Number); // Extraer la hora (10, 11, etc.)
+
+                        // Deshabilitar si es el día actual y la hora es anterior a la hora actual
+                        checkbox.disabled = isToday && hour < currentHour;
+                        if (checkbox.disabled) {
+                            checkbox.checked = false; // Desmarcar si está deshabilitado
+                        }
+                    });
+                }
             }
-            
-            console.log(`Día: ${dayName}, Fecha: ${dayDate.toLocaleDateString()}, Hoy: ${today.toLocaleDateString()}, Deshabilitado: ${toggle.disabled}`);
+
+            console.log(`Día: ${dayName}, Fecha: ${dayDate.toLocaleDateString()}, Hoy: ${now.toLocaleDateString()}, Deshabilitado: ${toggle.disabled}`);
         });
     }
 
@@ -245,11 +268,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const day = this.dataset.day;
             const hoursContainer = document.getElementById(`hours-${day}`);
             const checkboxes = hoursContainer.querySelectorAll('.hour-checkbox');
-            
+            const now = new Date();
+            const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const currentHour = now.getHours();
+            const dayDate = new Date(now);
+            dayDate.setDate(dayDate.getDate() - dayDate.getDay() + dayMap[day]); // Calcular la fecha del día
+
+            const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
+            const isToday = dayDateWithoutTime.getTime() === currentDate.getTime();
+
             if (this.checked) {
                 hoursContainer.style.display = 'block';
                 checkboxes.forEach(checkbox => {
-                    checkbox.disabled = false;
+                    const hourValue = checkbox.value; // Ejemplo: "10:00", "11:00", etc.
+                    const [hour] = hourValue.split(':').map(Number); // Extraer la hora (10, 11, etc.)
+                    // Solo deshabilitar si es el día actual y la hora es anterior a la hora actual
+                    checkbox.disabled = isToday && hour < currentHour;
                 });
             } else {
                 hoursContainer.style.display = 'none';
@@ -261,6 +295,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Mapa de días para usar en el evento change
+    const dayMap = {
+        'domingo': 0,
+        'lunes': 1,
+        'martes': 2,
+        'miercoles': 3,
+        'jueves': 4,
+        'viernes': 5,
+        'sabado': 6
+    };
+
+    // Asegurarnos de que el evento change se dispare al cargar y al cambiar
     weekSelector.addEventListener('change', updateDaysAvailability);
     updateDaysAvailability(); // Llamada inicial
 });

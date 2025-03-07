@@ -1,5 +1,5 @@
- 
-<aside class="sidenav navbar navbar-vertical navbar-expand-xs border-0 fixed-start ms-3" 
+
+<aside class="sidenav navbar navbar-vertical navbar-expand-xs border-0 fixed-start ms-3"
        style="position: fixed; top: 0; left: 0; bottom: 0; width: 250px; background-color: white;">
   <div class="sidenav-header">
      <i class="fas fa-times p-3 cursor-pointer text-secondary opacity-5 position-absolute end-0 top-0 d-none d-xl-none" aria-hidden="true" id="iconSidenav"></i>
@@ -34,7 +34,7 @@
       <li class="nav-item mt-2">
         <h6 class="ps-4 ms-2 text-uppercase text-xs font-weight-bolder opacity-6">Funciones</h6>
       </li>
-  
+
       <li class="nav-item pb-2">
     <a class="nav-link {{ (Request::is('user-management') ? 'active' : '') }}" href="{{ url('user-management') }}">
         <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
@@ -52,6 +52,15 @@
         <span class="nav-link-text ms-1">Canchas</span>
     </a>
 </li>
+
+        <li class="nav-item pb-2">
+            <a class="nav-link {{ (Request::is('daily-matches') ? 'active' : '') }}" href="{{ url('daily-matches') }}">
+                <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+                    <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('daily-matches') ? 'fa-futbol text-white' : 'fa-futbol text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
+                </div>
+                <span class="nav-link-text ms-1">Partidos</span>
+            </a>
+        </li>
 
 <li class="nav-item pb-2">
     <a class="nav-link {{ (Request::is('tournament') ? 'active' : '') }}" href="{{ url('tournament') }}">
@@ -107,8 +116,8 @@
           <span class="nav-link-text ms-1">Billing</span>
         </a>
       </li>
-  
+
     </ul>
   </div>
-   
+
 </aside>
