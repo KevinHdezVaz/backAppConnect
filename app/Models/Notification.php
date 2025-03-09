@@ -11,7 +11,9 @@ class Notification extends Model
     protected $fillable = [
         'title',
         'message', 
-        'player_ids'
+        'player_ids',
+        'read',
+ 
     ];
 
     protected $casts = [

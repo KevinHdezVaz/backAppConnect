@@ -129,51 +129,50 @@
                             </thead>
                             <tbody>
                             @php
-    $days = [
-        'domingo' => 'Domingo',
-        'lunes' => 'Lunes',
-        'martes' => 'Martes',
-        'miercoles' => 'Miércoles',
-        'jueves' => 'Jueves',
-        'viernes' => 'Viernes',
-        'sabado' => 'Sábado'
-    ];
- 
-                                    $hours = [];
-                                    for($i = 10; $i <= 19; $i++) {
-                                        $hours[] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
-                                    }
-                                @endphp
+                                $days = [
+                                    'domingo' => 'Domingo',
+                                    'lunes' => 'Lunes',
+                                    'martes' => 'Martes',
+                                    'miercoles' => 'Miércoles',
+                                    'jueves' => 'Jueves',
+                                    'viernes' => 'Viernes',
+                                    'sabado' => 'Sábado'
+                                ];
+                                $hours = [];
+                                for($i = 10; $i <= 19; $i++) {
+                                    $hours[] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
+                                }
+                            @endphp
 
-                                @foreach($days as $dayKey => $dayName)
-                                    <tr class="day-row">
-                                        <td>{{ $dayName }}</td>
-                                        <td>
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input day-toggle" 
-                                                       type="checkbox" 
-                                                       data-day="{{ $dayKey }}">
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div class="hours-container" id="hours-{{ $dayKey }}" style="display: none">
-                                                @foreach($hours as $hour)
-                                                    <div class="form-check form-check-inline">
-                                                        <input class="form-check-input hour-checkbox" 
-                                                               type="checkbox" 
-                                                               name="days[{{ $dayKey }}][hours][]" 
-                                                               value="{{ $hour }}"
-                                                               disabled
-                                                               id="{{ $dayKey }}-{{ $hour }}">
-                                                        <label class="form-check-label" for="{{ $dayKey }}-{{ $hour }}">
-                                                            {{ $hour }}
-                                                        </label>
-                                                    </div>
-                                                @endforeach
-                                            </div>
-                                        </td>
-                                    </tr>
-                                @endforeach
+                            @foreach($days as $dayKey => $dayName)
+                                <tr class="day-row">
+                                    <td>{{ $dayName }}</td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input day-toggle" 
+                                                   type="checkbox" 
+                                                   data-day="{{ $dayKey }}">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="hours-container" id="hours-{{ $dayKey }}" style="display: none">
+                                            @foreach($hours as $hour)
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input hour-checkbox" 
+                                                           type="checkbox" 
+                                                           name="days[{{ $dayKey }}][hours][]" 
+                                                           value="{{ $hour }}"
+                                                           disabled
+                                                           id="{{ $dayKey }}-{{ $hour }}">
+                                                    <label class="form-check-label" for="{{ $dayKey }}-{{ $hour }}">
+                                                        {{ $hour }}
+                                                    </label>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
                             </tbody>
                         </table>
                     </div>
@@ -183,50 +182,65 @@
                     <a href="{{ route('daily-matches.index') }}" class="btn btn-light m-0">Cancelar</a>
                     <button type="submit" class="btn bg-gradient-primary m-0 ms-2">Crear Partido</button>
                 </div>
+
+                <!-- Resumen de la selección -->
+                <div class="mt-4">
+                    <h6 class="mb-2">Resumen de la Selección</h6>
+                    <div id="summary" class="alert alert-info text-white" role="alert">
+                        <p class="mb-0">Por favor, completa el formulario para ver el resumen.</p>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
 </div>
 
 <script>
-
-    
 document.addEventListener('DOMContentLoaded', function() {
     const weekSelector = document.getElementById('week_selection');
+    const nameInput = document.querySelector('input[name="name"]');
+    const fieldSelect = document.querySelector('select[name="field_id"]');
+    const gameTypeSelect = document.querySelector('select[name="game_type"]');
+    const priceInput = document.querySelector('input[name="price"]');
     const dayToggles = document.querySelectorAll('.day-toggle');
+    const summaryDiv = document.getElementById('summary');
+
+    if (!weekSelector) {
+        console.error('Elemento week_selection no encontrado');
+        return;
+    }
+    if (!summaryDiv) {
+        console.error('Elemento summary no encontrado');
+        return;
+    }
+
+    const dayMap = {
+        'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3,
+        'jueves': 4, 'viernes': 5, 'sabado': 6
+    };
+
+    function formatDate(date) {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0'); // +1 porque getMonth() empieza en 0
+        return `${day}/${month}`;
+    }
 
     function updateDaysAvailability() {
         const isNextWeek = weekSelector.value === 'next';
-        const now = new Date(); // Obtener la fecha y hora actual
-        const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Solo fecha actual, sin hora
-        const currentHour = now.getHours(); // Obtener la hora actual (0-23)
+        const now = new Date();
+        const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const currentHour = now.getHours();
 
         dayToggles.forEach(toggle => {
             const dayName = toggle.dataset.day;
-            let dayDate = new Date(now); // Clonar la fecha actual
+            let dayDate = new Date(now);
+            dayDate.setDate(dayDate.getDate() - dayDate.getDay()); // Ir al inicio de la semana (domingo)
+            dayDate.setDate(dayDate.getDate() + dayMap[dayName]); // Avanzar al día correspondiente
 
-            // Mapa de días de la semana (0 = domingo, 1 = lunes, etc.)
-            const dayMap = {
-                'domingo': 0,
-                'lunes': 1,
-                'martes': 2,
-                'miercoles': 3,
-                'jueves': 4,
-                'viernes': 5,
-                'sabado': 6
-            };
-
-            // Ajustar al inicio de la semana (domingo)
-            dayDate.setDate(dayDate.getDate() - dayDate.getDay()); // Ir al domingo
-            // Avanzar al día correspondiente
-            dayDate.setDate(dayDate.getDate() + dayMap[dayName]);
-
-            // Ajustar para la próxima semana si es necesario
             if (isNextWeek) {
                 dayDate.setDate(dayDate.getDate() + 7);
-                toggle.disabled = false; // Todos los días de la próxima semana deben estar habilitados
+                toggle.disabled = false;
             } else {
-                // Para la semana actual, deshabilitar días anteriores
                 const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
                 toggle.disabled = dayDateWithoutTime < currentDate;
             }
@@ -234,55 +248,84 @@ document.addEventListener('DOMContentLoaded', function() {
             if (toggle.disabled) {
                 toggle.checked = false;
                 const hoursContainer = document.getElementById(`hours-${dayName}`);
-                if (hoursContainer) {
-                    hoursContainer.style.display = 'none';
-                }
+                if (hoursContainer) hoursContainer.style.display = 'none';
             } else {
-                // Si el día está habilitado, deshabilitar los horarios pasados solo para el día actual
                 const hoursContainer = document.getElementById(`hours-${dayName}`);
                 if (hoursContainer) {
                     const hourCheckboxes = hoursContainer.querySelectorAll('.hour-checkbox');
-                    const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()); // Definir aquí para uso local
-                    const isToday = dayDateWithoutTime.getTime() === currentDate.getTime(); // Comparar si es el día actual
+                    const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
+                    const isToday = dayDateWithoutTime.getTime() === currentDate.getTime();
 
                     hourCheckboxes.forEach(checkbox => {
-                        const hourValue = checkbox.value; // Ejemplo: "10:00", "11:00", etc.
-                        const [hour] = hourValue.split(':').map(Number); // Extraer la hora (10, 11, etc.)
-
-                        // Deshabilitar si es el día actual y la hora es anterior a la hora actual
+                        const hour = parseInt(checkbox.value.split(':')[0]);
                         checkbox.disabled = isToday && hour < currentHour;
-                        if (checkbox.disabled) {
-                            checkbox.checked = false; // Desmarcar si está deshabilitado
-                        }
+                        if (checkbox.disabled) checkbox.checked = false;
                     });
                 }
             }
-
-            console.log(`Día: ${dayName}, Fecha: ${dayDate.toLocaleDateString()}, Hoy: ${now.toLocaleDateString()}, Deshabilitado: ${toggle.disabled}`);
         });
+        updateSummary();
     }
 
-    // Agregar evento para mostrar/ocultar horarios
+    function updateSummary() {
+        let summaryHtml = '<p class="mb-0">';
+        const weekText = weekSelector.value === 'current' ? 'Esta semana' : 'Próxima semana';
+        const name = nameInput ? nameInput.value || 'No especificado' : 'No especificado';
+        const field = fieldSelect && fieldSelect.selectedIndex >= 0 ? fieldSelect.options[fieldSelect.selectedIndex].text : 'No seleccionada';
+        const gameType = gameTypeSelect && gameTypeSelect.selectedIndex >= 0 ? gameTypeSelect.options[gameTypeSelect.selectedIndex].text : 'No seleccionado';
+        const price = priceInput && priceInput.value ? `$${priceInput.value}` : 'No especificado';
+
+        summaryHtml += `<strong>Semana:</strong> ${weekText}<br>`;
+        summaryHtml += `<strong>Nombre del Partido:</strong> ${name}<br>`;
+        summaryHtml += `<strong>Cancha:</strong> ${field}<br>`;
+        summaryHtml += `<strong>Tipo de Partido:</strong> ${gameType}<br>`;
+        summaryHtml += `<strong>Precio por Jugador:</strong> ${price}<br>`;
+
+        let selectedDays = [];
+        const now = new Date();
+        const isNextWeek = weekSelector.value === 'next';
+        dayToggles.forEach(toggle => {
+            if (toggle.checked) {
+                const dayName = toggle.dataset.day;
+                let dayDate = new Date(now);
+                dayDate.setDate(dayDate.getDate() - dayDate.getDay() + dayMap[dayName]);
+                if (isNextWeek) dayDate.setDate(dayDate.getDate() + 7);
+
+                const formattedDate = formatDate(dayDate);
+                const hoursContainer = document.getElementById(`hours-${dayName}`);
+                if (hoursContainer) {
+                    const selectedHours = Array.from(hoursContainer.querySelectorAll('.hour-checkbox:checked'))
+                        .map(checkbox => checkbox.value);
+                    if (selectedHours.length > 0) {
+                        selectedDays.push(`<strong>${formattedDate}:</strong> ${selectedHours.join(', ')}`);
+                    }
+                }
+            }
+        });
+
+        summaryHtml += `<strong>Días y Horarios:</strong> ${selectedDays.length > 0 ? selectedDays.join('<br>') : 'Ningún día seleccionado'}`;
+        summaryHtml += '</p>';
+        summaryDiv.innerHTML = summaryHtml;
+    }
+
     dayToggles.forEach(toggle => {
         toggle.addEventListener('change', function() {
             const day = this.dataset.day;
             const hoursContainer = document.getElementById(`hours-${day}`);
+            if (!hoursContainer) return;
+
             const checkboxes = hoursContainer.querySelectorAll('.hour-checkbox');
             const now = new Date();
             const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const currentHour = now.getHours();
             const dayDate = new Date(now);
-            dayDate.setDate(dayDate.getDate() - dayDate.getDay() + dayMap[day]); // Calcular la fecha del día
-
-            const dayDateWithoutTime = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
-            const isToday = dayDateWithoutTime.getTime() === currentDate.getTime();
+            dayDate.setDate(dayDate.getDate() - dayDate.getDay() + dayMap[day]);
+            const isToday = dayDate.getTime() === currentDate.getTime();
 
             if (this.checked) {
                 hoursContainer.style.display = 'block';
                 checkboxes.forEach(checkbox => {
-                    const hourValue = checkbox.value; // Ejemplo: "10:00", "11:00", etc.
-                    const [hour] = hourValue.split(':').map(Number); // Extraer la hora (10, 11, etc.)
-                    // Solo deshabilitar si es el día actual y la hora es anterior a la hora actual
+                    const hour = parseInt(checkbox.value.split(':')[0]);
                     checkbox.disabled = isToday && hour < currentHour;
                 });
             } else {
@@ -292,23 +335,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     checkbox.checked = false;
                 });
             }
+            updateSummary();
         });
     });
 
-    // Mapa de días para usar en el evento change
-    const dayMap = {
-        'domingo': 0,
-        'lunes': 1,
-        'martes': 2,
-        'miercoles': 3,
-        'jueves': 4,
-        'viernes': 5,
-        'sabado': 6
-    };
+    weekSelector.addEventListener('change', () => { updateDaysAvailability(); updateSummary(); });
+    if (nameInput) nameInput.addEventListener('input', updateSummary);
+    if (fieldSelect) fieldSelect.addEventListener('change', updateSummary);
+    if (gameTypeSelect) gameTypeSelect.addEventListener('change', updateSummary);
+    if (priceInput) priceInput.addEventListener('input', updateSummary);
+    document.querySelectorAll('.hour-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSummary);
+    });
 
-    // Asegurarnos de que el evento change se dispare al cargar y al cambiar
-    weekSelector.addEventListener('change', updateDaysAvailability);
-    updateDaysAvailability(); // Llamada inicial
+    updateDaysAvailability();
 });
 </script>
 

@@ -8,6 +8,7 @@ use App\Http\Controllers\StoryController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\SettingController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\MatchTeamController;
@@ -19,9 +20,10 @@ use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\MatchPlayersController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\API\TorneoAPIController;
+use App\Http\Controllers\CarouselImageController;
+use App\Http\Controllers\ProductTiendaController;
 use App\Http\Controllers\API\ChatMensajeController;
 use App\Http\Middleware\ValidateMercadoPagoWebhook;
-use App\Http\Controllers\CarouselImageController;
 use App\Http\Controllers\API\NotificationApiController;
 
 
@@ -71,10 +73,17 @@ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
         Route::get('pending', [PaymentController::class, 'pending'])->name('payments.pending');
     });
  
+    Route::post('/settings/update', [SettingController::class, 'update'])->name('settings.update');
 
+    Route::get('/settings/show_store', [SettingController::class, 'showStore']);
+    Route::get('/settings/show_tournaments', [SettingController::class, 'showTournaments']);
+    
+    Route::get('/product-tienda', [ProductTiendaController::class, 'apiIndex'])->name('product-tienda.api.index');    
     // routes/api.php
 Route::get('/matches/{matchId}/comments', [CommentController::class, 'index']);
 Route::post('/matches/{matchId}/comments', [CommentController::class, 'store']);
+
+Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
 
 
     Route::get('matches/{match}/rating', [MatchRatingController::class, 'showRatingScreen']);
@@ -155,7 +164,11 @@ Route::group(['prefix' => 'torneos'], function () {
  });
 
 
-
+ Route::prefix('notifications')->group(function () {
+    Route::get('/', [NotificationController::class, 'apiIndex'])->name('api.notifications.index');
+    Route::post('/', [NotificationController::class, 'sendNotification'])->name('api.notifications.send');
+    Route::delete('/{id}', [NotificationController::class, 'apiDestroy'])->name('api.notifications.destroy');
+ });
 
   Route::post('/store-player-id', [NotificationController::class, 'storePlayerId']);
 

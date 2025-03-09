@@ -6,8 +6,7 @@ use App\Models\User;
 use App\Models\Field;
 use App\Models\Partido;
 use App\Models\MatchTeam;
-use App\Models\MatchPlayer;
-use App\Models\MatchRating;
+use App\Models\MatchTeamPlayer; // Añadir este modelo
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,8 +36,6 @@ class DailyMatch extends Model
         'max_players' => 'integer'
     ];
 
-  
-    
     public function field()
     {
         return $this->belongsTo(Field::class);
@@ -49,9 +46,17 @@ class DailyMatch extends Model
         return $this->hasMany(MatchTeam::class, 'equipo_partido_id');
     }
 
-    public function players(): HasMany
+    // Cambiar la relación players para usar match_team_players
+    public function players()
     {
-        return $this->hasMany(MatchPlayer::class, 'match_id');
+        return $this->hasManyThrough(
+            MatchTeamPlayer::class, // Nuevo modelo para match_team_players
+            MatchTeam::class,       // Modelo intermedio
+            'equipo_partido_id',    // Clave foránea en match_teams que apunta a equipo_partidos
+            'match_team_id',        // Clave foránea en match_team_players que apunta a match_teams
+            'id',                   // Clave primaria en equipo_partidos
+            'id'                    // Clave primaria en match_teams
+        );
     }
 
     public function ratings(): HasMany
@@ -67,18 +72,18 @@ class DailyMatch extends Model
     // Métodos de utilidad
     public function isFullyBooked(): bool
     {
-        return $this->player_count >= $this->max_players;
+        return $this->players()->count() >= $this->max_players; // Actualizar para usar la relación real
     }
 
     public function canJoin(User $user): bool
     {
         return !$this->isFullyBooked() && 
-               !$this->players()->where('player_id', $user->id)->exists();
+               !$this->players()->where('user_id', $user->id)->exists(); // Cambiar player_id por user_id
     }
 
     public function getRemainingSpots(): int
     {
-        return $this->max_players - $this->player_count;
+        return $this->max_players - $this->players()->count(); // Actualizar para usar la relación real
     }
 
     // Modificadores de atributos para manejar los tiempos

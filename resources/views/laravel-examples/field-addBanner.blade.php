@@ -26,7 +26,7 @@
                     @error('image')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
-                    <small class="text-muted">Formatos permitidos: JPG, JPEG, PNG. Tamaño máximo: 2MB</small>
+                    <small class="text-muted">Formatos permitidos: JPG, JPEG, PNG. Tamaño máximo: 10MB</small>
                 </div>
                 <div class="d-flex justify-content-end mt-4">
                     <a href="{{ url('banner') }}" class="btn btn-light m-0">Cancelar</a>

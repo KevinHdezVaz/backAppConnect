@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Torneo;
 
 use App\Models\Equipo;
 use App\Models\Torneo;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,10 +14,14 @@ use Illuminate\Support\Facades\Validator;
 
 class TorneoController extends Controller
 {
+   
+
     public function index()
     {
         $torneos = Torneo::all();
-        return view('laravel-examples.Torneos.field-listTorneo', compact('torneos'));
+        $show_tournaments = Setting::where('key', 'show_tournaments')->first()?->value === 'true';
+        
+        return view('laravel-examples.Torneos.field-listTorneo', compact('torneos', 'show_tournaments'));
     }
 
     public function create()

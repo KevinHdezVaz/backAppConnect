@@ -46,67 +46,73 @@ class FieldManagementController extends Controller
         return view('laravel-examples.field-addCancha');
     }
 
+   
+    
     public function store(Request $request)
-    {
-        \Log::debug('Datos recibidos:', $request->all());
-        try {
-            $validated = $request->validate([
-                'name' => 'required|string',
-                'description' => 'required|string',
-                'price_per_match' => 'required|numeric',
-                'types' => 'required|array|min:1',
-                'types.*' => 'in:fut5,fut7,fut11',
-                'latitude' => 'nullable|numeric',
-                'municipio' => 'required|string',
-                'longitude' => 'nullable|numeric',
-                'is_active' => 'sometimes',
-                'amenities' => 'nullable|array',
-                'available_hours' => 'required|string', // Viene como JSON del frontend
-                'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048'
-            ]);
-    
-            // Decodificar available_hours para validar su formato
-            $availableHours = json_decode($request->input('available_hours'), true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new \Exception('Error en el formato de available_hours: ' . json_last_error_msg());
-            }
-    
-            // Preparar los datos sin volver a codificar innecesariamente
-            $validatedData = [
-                'name' => $validated['name'],
-                'description' => $validated['description'],
-                'price_per_match' => $validated['price_per_match'],
-                'municipio' => $validated['municipio'],
-                'latitude' => $validated['latitude'] ?? null,
-                'longitude' => $validated['longitude'] ?? null,
-                'is_active' => $request->has('is_active') ? 1 : 0,
-                'types' => json_encode($validated['types']),
-                'available_hours' => $request->input('available_hours'), // Usar directamente el JSON válido
-                'amenities' => json_encode($request->input('amenities', []))
-            ];
-    
-            // Procesar imágenes
-            if ($request->hasFile('images')) {
-                $imagePaths = [];
-                foreach ($request->file('images') as $image) {
-                    $path = $image->store('fields', 'public');
-                    $imagePaths[] = Storage::url($path);
-                }
-                $validatedData['images'] = json_encode($imagePaths);
-            }
-    
-            $field = Field::create($validatedData);
-            return redirect()->route('field-management')->with('success', 'Cancha creada exitosamente');
-        } catch (\Exception $e) {
-            \Log::error('Error en store:', [
-                'mensaje' => $e->getMessage(),
-                'línea' => $e->getLine(),
-                'archivo' => $e->getFile(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return redirect()->back()->withInput()->withErrors(['error' => 'Error al crear la cancha: ' . $e->getMessage()]);
+{
+    \Log::debug('Datos recibidos:', $request->all());
+    try {
+        $validated = $request->validate([
+            'name' => 'required|string',
+            'description' => 'required|string',
+            'price_per_match' => 'required|numeric',
+            'types' => 'required|array|min:1',
+            'types.*' => 'in:fut5,fut7,fut11',
+            'latitude' => 'nullable|numeric',
+            'municipio' => 'required|string',
+            'longitude' => 'nullable|numeric',
+            'is_active' => 'sometimes',
+            'amenities' => 'nullable|array',
+            'available_hours' => 'required|string', // Viene como JSON del frontend
+            'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048'
+        ]);
+
+        // Decodificar available_hours para validar su formato
+        $availableHours = json_decode($request->input('available_hours'), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception('Error en el formato de available_hours: ' . json_last_error_msg());
         }
+
+        // Preparar los datos sin volver a codificar innecesariamente
+        $validatedData = [
+            'name' => $validated['name'],
+            'description' => $validated['description'],
+            'price_per_match' => $validated['price_per_match'],
+            'municipio' => $validated['municipio'],
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'is_active' => $request->has('is_active') ? 1 : 0,
+            'types' => json_encode($validated['types']),
+            'available_hours' => $availableHours, // Usar el array decodificado
+            'amenities' => json_encode($request->input('amenities', []))
+        ];
+
+        // Procesar imágenes
+        if ($request->hasFile('images')) {
+            $imagePaths = [];
+            foreach ($request->file('images') as $image) {
+                $path = $image->store('fields', 'public');
+                $imagePaths[] = Storage::url($path);
+            }
+            $validatedData['images'] = json_encode($imagePaths);
+        }
+
+        // Crear la cancha
+        $field = Field::create($validatedData);
+
+        return redirect()->route('field-management')->with('success', 'Cancha creada exitosamente');
+    } catch (\Exception $e) {
+        \Log::error('Error en store:', [
+            'mensaje' => $e->getMessage(),
+            'línea' => $e->getLine(),
+            'archivo' => $e->getFile(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return redirect()->back()->withInput()->withErrors(['error' => 'Error al crear la cancha: ' . $e->getMessage()]);
     }
+}
+
+
     public function update(Request $request, $id)
     {
         Log::info('Datos recibidos en update para field_id: ' . $id, $request->all());
@@ -134,6 +140,7 @@ class FieldManagementController extends Controller
                 'longitude'
             ]);
     
+            // Convertir tipos y amenities a JSON
             if ($request->has('types')) {
                 $data['types'] = json_encode($request->input('types'));
             }
@@ -144,12 +151,14 @@ class FieldManagementController extends Controller
     
             // Manejar available_hours
             if ($request->has('available_hours')) {
-                $hours = json_decode($request->input('available_hours'), true);
+                // Decodificar el JSON recibido para asegurarnos de que sea válido
+                $availableHours = json_decode($request->input('available_hours'), true);
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     throw new \Exception('Formato JSON inválido para available_hours');
                 }
-                $data['available_hours'] = $request->input('available_hours'); // Usar directamente el JSON válido
-                Log::info('Available hours procesados: ' . $data['available_hours']);
+                // Guardar el JSON decodificado como un array (Laravel lo convertirá a JSON automáticamente)
+                $data['available_hours'] = $availableHours;
+                Log::info('Available hours procesados:', $availableHours);
             }
     
             // Manejar imágenes
@@ -176,7 +185,9 @@ class FieldManagementController extends Controller
     
             $data['is_active'] = $request->has('is_active') ? 1 : 0;
     
+            // Actualizar el campo
             $field->update($data);
+    
             return redirect()->route('field-management')->with('success', 'Cancha actualizada exitosamente');
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Error de validación al actualizar cancha: ' . $e->getMessage(), $e->errors());

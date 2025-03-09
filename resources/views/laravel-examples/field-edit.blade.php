@@ -17,7 +17,7 @@
 <div class="container-fluid py-4">
     <div class="card">
         <div class="card-header pb-0 px-3">
-            <h6 class="mb-0">Editar Cancha</h6>
+            <h6 class="schedule-card-title mb-0">Editar Cancha</h6>
         </div>
         <div class="card-body pt-4 p-3">
             <form action="{{ route('field-management.update', $field->id) }}" method="POST" enctype="multipart/form-data">
@@ -40,26 +40,27 @@
                             <label>Tipos de Cancha</label>
                             <div class="row">
                                 @php
-                                    $types = json_decode($field->types ?? '[]', true);
+                                    $types = is_string($field->types) ? json_decode($field->types, true) : ($field->types ?? []);
+                                    $types = is_array($types) ? $types : [];
                                 @endphp
                                 <div class="col-md-4">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="types[]" value="fut5"
-                                               {{ in_array('fut5', $types ?? []) ? 'checked' : '' }}>
+                                               {{ in_array('fut5', $types) ? 'checked' : '' }}>
                                         <label class="form-check-label">Fútbol 5</label>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="types[]" value="fut7"
-                                               {{ in_array('fut7', $types ?? []) ? 'checked' : '' }}>
+                                               {{ in_array('fut7', $types) ? 'checked' : '' }}>
                                         <label class="form-check-label">Fútbol 7</label>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="types[]" value="fut11"
-                                               {{ in_array('fut11', $types ?? []) ? 'checked' : '' }}>
+                                               {{ in_array('fut11', $types) ? 'checked' : '' }}>
                                         <label class="form-check-label">Fútbol 11</label>
                                     </div>
                                 </div>
@@ -67,32 +68,26 @@
                             @error('types')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
-                            <!-- Mostrar los tipos seleccionados como texto legible -->
                             <div class="mt-2 text-muted" id="types-display">
                                 @php
-                                    $typesArray = json_decode($field->types ?? '[]', true);
-                                    if (!empty($typesArray)) {
-                                        $typeNames = [];
-                                        foreach ($typesArray as $type) {
-                                            switch ($type) {
-                                                case 'fut5':
-                                                    $typeNames[] = 'Fútbol 5';
-                                                    break;
-                                                case 'fut7':
-                                                    $typeNames[] = 'Fútbol 7';
-                                                    break;
-                                                case 'fut11':
-                                                    $typeNames[] = 'Fútbol 11';
-                                                    break;
-                                            }
+                                    $typeNames = [];
+                                    foreach ($types as $type) {
+                                        switch ($type) {
+                                            case 'fut5':
+                                                $typeNames[] = 'Fútbol 5';
+                                                break;
+                                            case 'fut7':
+                                                $typeNames[] = 'Fútbol 7';
+                                                break;
+                                            case 'fut11':
+                                                $typeNames[] = 'Fútbol 11';
+                                                break;
                                         }
-                                        if (count($typeNames) > 1) {
-                                            echo 'Tipos seleccionados: ' . implode(' y ', $typeNames);
-                                        } else {
-                                            echo 'Tipo seleccionado: ' . (isset($typeNames[0]) ? $typeNames[0] : 'Ninguno');
-                                        }
+                                    }
+                                    if (count($typeNames) > 1) {
+                                        echo 'Tipos seleccionados: ' . implode(' y ', $typeNames);
                                     } else {
-                                        echo 'Ningún tipo seleccionado';
+                                        echo 'Tipo seleccionado: ' . ($typeNames[0] ?? 'Ninguno');
                                     }
                                 @endphp
                             </div>
@@ -158,27 +153,28 @@
                 <div class="form-group">
                     <label>Amenities</label>
                     @php
-                        $amenities = json_decode($field->amenities ?? '[]');
+                        $amenities = is_string($field->amenities) ? json_decode($field->amenities, true) : ($field->amenities ?? []);
+                        $amenities = is_array($amenities) ? $amenities : [];
                     @endphp
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="amenities[]" value="Vestuarios"
-                                       {{ in_array('Vestuarios', $amenities ?? []) ? 'checked' : '' }}>
+                                       {{ in_array('Vestuarios', $amenities) ? 'checked' : '' }}>
                                 <label class="form-check-label">Vestuarios</label>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="amenities[]" value="Estacionamiento"
-                                       {{ in_array('Estacionamiento', $amenities ?? []) ? 'checked' : '' }}>
+                                       {{ in_array('Estacionamiento', $amenities) ? 'checked' : '' }}>
                                 <label class="form-check-label">Estacionamiento</label>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="amenities[]" value="Iluminación nocturna"
-                                       {{ in_array('Iluminación nocturna', $amenities ?? []) ? 'checked' : '' }}>
+                                       {{ in_array('Iluminación nocturna', $amenities) ? 'checked' : '' }}>
                                 <label class="form-check-label">Iluminación nocturna</label>
                             </div>
                         </div>
@@ -193,43 +189,48 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="form-group">
-                    <label for="images">Imágenes Actuales</label>
-                    <div class="row mb-3">
-                        @if($field->images)
-                            @foreach(json_decode($field->images) as $index => $image)
-                                <div class="col-md-3 mb-2" id="image-container-{{ $index }}">
-                                    <div class="position-relative">
-                                        <img src="{{ $image }}" class="img-thumbnail" style="height: 150px; width: 100%; object-fit: cover;">
-                                        <button type="button" 
-                                                class="btn btn-danger btn-sm position-absolute"
-                                                style="top: 5px; right: 5px; padding: 3px 8px; z-index: 10;"
-                                                onclick="removeImage({{ $index }})">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                        <input type="hidden" name="existing_images[]" value="{{ $image }}">
-                                    </div>
-                                </div>
-                            @endforeach
-                        @endif
+    <label for="images">Imágenes Actuales</label>
+    <div class="row mb-3">
+        @php
+            $images = is_string($field->images) ? json_decode($field->images, true) : ($field->images ?? []);
+            $images = is_array($images) ? $images : [];
+        @endphp
+        @if(!empty($images))
+            @foreach($images as $index => $image)
+                <div class="col-md-3 mb-2" id="image-container-{{ $index }}">
+                    <div class="position-relative">
+                        <img src="{{ $image }}" class="img-thumbnail" style="height: 150px; width: 100%; object-fit: cover;">
+                        <button type="button" 
+                                class="btn btn-danger btn-sm position-absolute"
+                                style="top: 5px; right: 5px; padding: 3px 8px; z-index: 10;"
+                                onclick="removeImage({{ $index }})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <input type="hidden" name="existing_images[]" value="{{ $image }}">
                     </div>
-                    
-                    <label for="images">Agregar Nuevas Imágenes</label>
-                    <input type="file" name="images[]" class="form-control @error('images') is-invalid @enderror" multiple accept="image/*">
-                    <div id="image-preview-container" class="row mt-3"></div>
-                    @error('images')
+                </div>
+            @endforeach
+        @else
+            <p>No hay imágenes actuales.</p>
+        @endif
+    </div>
+    
+    <label for="images">Agregar Nuevas Imágenes</label>
+    <input type="file" name="images[]" class="form-control @error('images') is-invalid @enderror" multiple accept="image/*">
+    <div id="image-preview-container" class="row mt-3"></div>
+    @error('images')
+        <div class="invalid-feedback">{{ $message }}</div>
+    @enderror
+</div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_active" {{ $field->is_active ? 'checked' : '' }}>
+                    <label class="form-check-label">Cancha Activa</label>
+                    @error('is_active')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
                 </div>
 
-                <div class="form-check form-switch">
-    <input class="form-check-input" type="checkbox" name="is_active" {{ $field->is_active ? 'checked' : '' }}>
-    <label class="form-check-label">Cancha Activa</label>
-    @error('is_active')
-        <div class="invalid-feedback">{{ $message }}</div>
-    @enderror
-</div>
                 <div class="d-flex justify-content-end mt-4">
                     <a href="{{ route('field-management') }}" class="btn btn-light m-0">Cancelar</a>
                     <button type="submit" class="btn bg-gradient-primary m-0 ms-2">Actualizar Cancha</button>
@@ -400,28 +401,29 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateAvailableHours() {
-        const availableHours = {};
+    const availableHours = {};
+    
+    document.querySelectorAll('.day-enable:checked').forEach(checkbox => {
+        const day = checkbox.dataset.day;
+        const startTime = document.querySelector(`.time-start[data-day="${day}"]`).value;
+        const endTime = document.querySelector(`.time-end[data-day="${day}"]`).value;
         
-        document.querySelectorAll('.day-enable:checked').forEach(checkbox => {
-            const day = checkbox.dataset.day;
-            const startTime = document.querySelector(`.time-start[data-day="${day}"]`).value;
-            const endTime = document.querySelector(`.time-end[data-day="${day}"]`).value;
-            
-            if (startTime && endTime) {
-                availableHours[day] = generateTimeSlots(startTime, endTime);
-            }
-        });
-
-        let hiddenInput = document.getElementById('available_hours_input');
-        if (!hiddenInput) {
-            hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'available_hours';
-            hiddenInput.id = 'available_hours_input';
-            document.querySelector('form').appendChild(hiddenInput);
+        if (startTime && endTime) {
+            availableHours[day] = generateTimeSlots(startTime, endTime);
         }
-        hiddenInput.value = JSON.stringify(availableHours);
+    });
+
+    // Actualizar el campo oculto
+    let hiddenInput = document.getElementById('available_hours_input');
+    if (!hiddenInput) {
+        hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'available_hours';
+        hiddenInput.id = 'available_hours_input';
+        document.querySelector('form').appendChild(hiddenInput);
     }
+    hiddenInput.value = JSON.stringify(availableHours); // Convertir a JSON una vez
+}
 
     // Inicializar los horarios al cargar la página
     updateAvailableHours();
@@ -448,7 +450,7 @@ document.addEventListener('DOMContentLoaded', function () {
         checkbox.addEventListener('change', updateTypesDisplay);
     });
 
-    updateTypesDisplay(); // Llamar inicialmente para mostrar los tipos seleccionados
+    updateTypesDisplay();
 });
 </script>
 @endsection

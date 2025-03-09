@@ -1,4 +1,5 @@
 @extends('layouts.user_type.auth')
+
 @section('content')
 <div class="container-fluid py-4">
     <div class="row">
@@ -18,7 +19,28 @@
                             {{ session('success') }}
                         </div>
                     @endif
-                    
+
+                    <!-- Switch para mostrar/ocultar Torneos -->
+                    <div class="px-4 py-3">
+                        <form method="POST" action="{{ route('settings.update') }}">
+                            @csrf
+                            @method('PUT')
+                            <input type="hidden" name="show_tournaments" value="0">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="showTournamentsSwitch" 
+                                       name="show_tournaments" 
+                                       value="1" 
+                                       {{ $show_tournaments ? 'checked' : '' }}>
+                                <label class="form-check-label" for="showTournamentsSwitch">
+                                    Mostrar Torneos en la App
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-sm bg-gradient-primary mt-2">Guardar</button>
+                        </form>
+                    </div>
+
                     <div class="table-responsive p-0">
                         <table class="table align-items-center mb-0">
                             <thead>
@@ -37,8 +59,8 @@
                                         <td>
                                             <div class="d-flex px-3 py-1">
                                                 <div>
-                                                @if(is_array($torneo->imagenesTorneo) && count($torneo->imagenesTorneo) > 0)
-    <img src="{{ $torneo->imagenesTorneo[0] }}" class="avatar avatar-sm me-3" alt="torneo imagen">
+                                                    @if(is_array($torneo->imagenesTorneo) && count($torneo->imagenesTorneo) > 0)
+                                                        <img src="{{ $torneo->imagenesTorneo[0] }}" class="avatar avatar-sm me-3" alt="torneo imagen">
                                                     @else
                                                         <div class="avatar avatar-sm me-3 bg-gradient-primary">
                                                             <i class="fas fa-trophy text-white"></i>
@@ -74,7 +96,6 @@
                                         </td>
                                         <td>
                                             <div class="d-flex">
-                                               
                                                 <a href="{{ route('torneos.edit', $torneo) }}" 
                                                    class="btn btn-link text-info px-3 mb-0">
                                                     <i class="fas fa-pencil-alt me-2"></i>Editar

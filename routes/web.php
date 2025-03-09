@@ -5,12 +5,14 @@ use App\Http\Controllers\ResetController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\SettingController;
 use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
 use App\Http\Controllers\API\FieldController;
 use App\Http\Controllers\DailyMatchController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ProductTiendaController;
 use App\Http\Controllers\Torneo\TorneoController;
 use App\Http\Controllers\ChangePasswordController;
 use App\Http\Controllers\UserManagementController;
@@ -113,6 +115,17 @@ Route::middleware(['auth:admin'])->group(function () {
     Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
     Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+
+ Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
+
+
+    Route::get('/product/{id}/edit', [ProductTiendaController::class, 'edit'])->name('product.edit');
+Route::put('/product/{id}', [ProductTiendaController::class, 'update'])->name('product.update');
+         Route::get('/product', [ProductTiendaController::class, 'index'])->name('product.index');
+        Route::get('/product/create', [ProductTiendaController::class, 'create'])->name('product.create');
+        Route::post('/product', [ProductTiendaController::class, 'store'])->name('product.store');
+        Route::delete('/product/{id}', [ProductTiendaController::class, 'destroy'])->name('product.destroy');
+ 
 
     // Torneo
     Route::get('/tournament', [TorneoController::class, 'index'])->name('torneos.index');

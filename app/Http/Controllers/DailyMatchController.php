@@ -10,9 +10,11 @@ use App\Models\DailyMatch;
 use App\Models\DeviceToken;
 use App\Models\MatchPlayer;
 use App\Models\MatchRating;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use App\Services\WalletService;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\NotificationController;
 use App\Models\NotificationEvent; // Agregar esta línea
 
 class DailyMatchController extends Controller
@@ -133,24 +135,21 @@ class DailyMatchController extends Controller
                         $errores[] = "Ya existe un partido el {$dayDate->format('d/m/Y')} a las {$hour}";
                         continue;
                     }
+// Obtener los tipos de la cancha seleccionada
 
-                    // Obtener los tipos de la cancha seleccionada
-                    $field = Field::findOrFail($request->field_id);
-                    \Log::debug('Tipos de la cancha:', ['types' => $field->types]);
+// Obtener los tipos de la cancha seleccionada y validar
+$field = Field::findOrFail($request->field_id);
+$fieldTypes = json_decode($field->types, true) ?? [];
+\Log::debug('Tipos de la cancha después de json_decode:', ['fieldTypes' => $fieldTypes]);
 
-                    $fieldTypes = json_decode($field->types, true) ?? [];
-                    \Log::debug('Field types decodificados:', ['fieldTypes' => $fieldTypes]);
-
-                    // Verificar si el game_type es válido para esta cancha
-                    if (!in_array($request->game_type, $fieldTypes)) {
-                        \Log::error('Tipo de partido inválido para la cancha', [
-                            'game_type' => $request->game_type,
-                            'field_types' => $fieldTypes
-                        ]);
-                        throw new \Exception('El tipo de partido seleccionado no es válido para esta cancha.');
-                    }
-                    
-
+// Verificar si el game_type es válido para esta cancha
+if (!in_array($request->game_type, $fieldTypes)) {
+    \Log::error('Tipo de partido inválido para la cancha', [
+        'game_type' => $request->game_type,
+        'field_types' => $fieldTypes
+    ]);
+    throw new \Exception('El tipo de partido seleccionado no es válido para esta cancha.');
+}
                     try {
                         $partido = DailyMatch::create([
                             'name' => $request->name,
@@ -326,150 +325,160 @@ public function index()
             'matches' => $matches
         ]);
     }
-
-public function joinMatch(Request $request, DailyMatch $match)
-{
-    $request->validate([
-        'team_id' => 'required|exists:match_teams,id'
-    ]);
-
-    $team = MatchTeam::findOrFail($request->team_id);
-
-    if ($match->player_count >= $match->max_players) {
-        return response()->json([
-            'message' => 'El partido está lleno'
-        ], 400);
-    }
-
-    if ($team->player_count >= $team->max_players) {
-        return response()->json([
-            'message' => 'El equipo está lleno'
-        ], 400);
-    }
-
-    $existingPlayer = MatchPlayer::where('match_id', $match->id)
-        ->where('player_id', $request->user()->id)
-        ->exists();
-
-    if ($existingPlayer) {
-        return response()->json([
-            'message' => 'Ya estás inscrito en este partido'
-        ], 400);
-    }
-
-    DB::transaction(function () use ($match, $request, $team) {
-        try {
-            \Log::info('Iniciando proceso de unión al equipo', [
-                'match_id' => $match->id,
-                'team_id' => $team->id,
-                'user_id' => $request->user()->id
-            ]);
-
-            MatchPlayer::create([
-                'match_id' => $match->id,
-                'player_id' => $request->user()->id,
-                'equipo_partido_id' => $team->id,
-                'position' => $request->position
-            ]);
-
-            $match->increment('player_count');
-            $team->increment('player_count');
-
-            // Verificar si el partido está lleno después de agregar al jugador
-            if ($match->player_count >= $match->max_players) {
-                $match->update(['status' => 'full']);
-                \Log::info('Partido lleno, estado actualizado a "full"', [
-                    'match_id' => $match->id,
-                    'player_count' => $match->player_count,
-                    'max_players' => $match->max_players
-                ]);
-
-                // Crear una reserva automática para la cancha
-                $startDateTime = Carbon::parse("{$match->schedule_date} {$match->start_time}");
-                $endDateTime = Carbon::parse("{$match->schedule_date} {$match->end_time}");
-
-                Booking::create([
-                    'field_id' => $match->field_id,
-                    'start_time' => $startDateTime,
-                    'end_time' => $endDateTime,
-                    'status' => 'confirmed',
-                    'daily_match_id' => $match->id, // Vincula con equipo_partidos
-                    'user_id' => null, // Reserva automática, sin usuario específico
-                    'total_price' => $match->price * $match->max_players, // Costo total estimado
-                    'payment_status' => 'pending', // Ajusta según tu lógica de pago
-                    'players_needed' => 0, // Partido lleno, no se necesitan más jugadores
-                    'allow_joining' => false, // No permitir uniones manuales
-                ]);
-
-                \Log::info('Reserva automática creada para el partido lleno', [
-                    'match_id' => $match->id,
-                    'field_id' => $match->field_id,
-                    'start_time' => $startDateTime->toDateTimeString(),
-                    'end_time' => $endDateTime->toDateTimeString()
-                ]);
-            }
-
-            // Crear o actualizar el recordatorio
-            $matchDateTime = Carbon::parse($match->schedule_date . ' ' . $match->start_time);
-            $reminderTime = $matchDateTime->copy()->subHour();
-
-            NotificationEvent::updateOrCreate(
-                [
-                    'equipo_partido_id' => $match->id,
-                    'event_type' => 'match_reminder'
-                ],
-                [
-                    'scheduled_at' => $reminderTime,
-                    'is_sent' => false
-                ]
-            );
-
-            \Log::info('Recordatorio creado para el partido', [
-                'match_id' => $match->id,
-                'scheduled_at' => $reminderTime
-            ]);
-
-            // Enviar notificación a otros jugadores
-            $playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
-                ->whereNotNull('user_id')
-                ->pluck('player_id')
-                ->toArray();
-
-            \Log::info('Enviando notificación a jugadores', [
-                'total_tokens' => count($playerIds),
-                'current_user' => $request->user()->id
-            ]);
-
-            if (!empty($playerIds)) {
-                $message = "Un nuevo jugador se ha unido al {$team->name} en el partido {$match->name}";
-                $title = "Nuevo jugador en partido";
-
-                $notificationController = app(NotificationController::class);
-                $response = $notificationController->sendOneSignalNotification(
-                    $playerIds,
-                    $message,
-                    $title
-                );
-
-                \Log::info('Respuesta de OneSignal', [
-                    'response' => json_decode($response, true)
-                ]);
-            } else {
-                \Log::warning('No se encontraron dispositivos para notificar');
-            }
-        } catch (\Exception $e) {
-            \Log::error('Error al enviar notificación o procesar unión', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            throw $e; // Re-lanzar para rollback
+    public function joinMatch(Request $request, DailyMatch $match)
+    {
+        $request->validate([
+            'team_id' => 'required|exists:match_teams,id'
+        ]);
+    
+        $team = MatchTeam::findOrFail($request->team_id);
+    
+        if ($match->player_count >= $match->max_players) {
+            return response()->json([
+                'message' => 'El partido está lleno'
+            ], 400);
         }
-    });
-
-    return response()->json([
-        'message' => 'Te has unido al equipo exitosamente'
-    ]);
-}
+    
+        if ($team->player_count >= $team->max_players) {
+            return response()->json([
+                'message' => 'El equipo está lleno'
+            ], 400);
+        }
+    
+        $existingPlayer = MatchPlayer::where('match_id', $match->id)
+            ->where('player_id', $request->user()->id)
+            ->exists();
+    
+        if ($existingPlayer) {
+            return response()->json([
+                'message' => 'Ya estás inscrito en este partido'
+            ], 400);
+        }
+    
+        DB::transaction(function () use ($match, $request, $team) {
+            try {
+                \Log::info('Iniciando proceso de unión al equipo', [
+                    'match_id' => $match->id,
+                    'team_id' => $team->id,
+                    'user_id' => $request->user()->id
+                ]);
+    
+                MatchPlayer::create([
+                    'match_id' => $match->id,
+                    'player_id' => $request->user()->id,
+                    'equipo_partido_id' => $team->id,
+                    'position' => $request->position
+                ]);
+    
+                $match->increment('player_count');
+                $team->increment('player_count');
+    
+                // Verificar si el partido está lleno después de agregar al jugador
+                if ($match->player_count >= $match->max_players) {
+                    $match->update(['status' => 'full']);
+                    \Log::info('Partido lleno, estado actualizado a "full"', [
+                        'match_id' => $match->id,
+                        'player_count' => $match->player_count,
+                        'max_players' => $match->max_players
+                    ]);
+    
+                    // Crear una reserva automática para la cancha
+                    $startDateTime = Carbon::parse("{$match->schedule_date} {$match->start_time}");
+                    $endDateTime = Carbon::parse("{$match->schedule_date} {$match->end_time}");
+    
+                    Booking::create([
+                        'field_id' => $match->field_id,
+                        'start_time' => $startDateTime,
+                        'end_time' => $endDateTime,
+                        'status' => 'confirmed',
+                        'daily_match_id' => $match->id, // Vincula con equipo_partidos
+                        'user_id' => null, // Reserva automática, sin usuario específico
+                        'total_price' => $match->price * $match->max_players, // Costo total estimado
+                        'payment_status' => 'pending', // Ajusta según tu lógica de pago
+                        'players_needed' => 0, // Partido lleno, no se necesitan más jugadores
+                        'allow_joining' => false, // No permitir uniones manuales
+                    ]);
+    
+                    \Log::info('Reserva automática creada para el partido lleno', [
+                        'match_id' => $match->id,
+                        'field_id' => $match->field_id,
+                        'start_time' => $startDateTime->toDateTimeString(),
+                        'end_time' => $endDateTime->toDateTimeString()
+                    ]);
+                }
+    
+                // Crear o actualizar el recordatorio
+                $matchDateTime = Carbon::parse($match->schedule_date . ' ' . $match->start_time);
+                $reminderTime = $matchDateTime->copy()->subHour();
+    
+                NotificationEvent::updateOrCreate(
+                    [
+                        'equipo_partido_id' => $match->id,
+                        'event_type' => 'match_reminder'
+                    ],
+                    [
+                        'scheduled_at' => $reminderTime,
+                        'is_sent' => false
+                    ]
+                );
+    
+                \Log::info('Recordatorio creado para el partido', [
+                    'match_id' => $match->id,
+                    'scheduled_at' => $reminderTime
+                ]);
+    
+                // Enviar notificación a otros jugadores
+                $playerIds = DeviceToken::where('user_id', '!=', $request->user()->id)
+                    ->whereNotNull('user_id')
+                    ->pluck('player_id')
+                    ->toArray();
+    
+                \Log::info('Enviando notificación a jugadores', [
+                    'total_tokens' => count($playerIds),
+                    'current_user' => $request->user()->id
+                ]);
+    
+                $validPlayerIds = array_filter($playerIds, function($playerId) use ($response) {
+                    return !in_array($playerId, $response['errors']['invalid_player_ids'] ?? []);
+                });
+                
+                if (!empty($validPlayerIds)) {
+                    try {
+                        \Log::info('Intentando guardar notificación', [
+                            'title' => $title,
+                            'message' => $message,
+                            'player_ids' => $validPlayerIds
+                        ]);
+                
+                        Notification::create([
+                            'title' => $title,
+                            'message' => $message,
+                            'player_ids' => json_encode($validPlayerIds)
+                        ]);
+                
+                        \Log::info('Notificación guardada exitosamente');
+                    } catch (\Exception $e) {
+                        \Log::error('Error al guardar la notificación', [
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString()
+                        ]);
+                    }
+                } else {
+                    \Log::warning('No hay player_ids válidos para guardar la notificación');
+                }
+            } catch (\Exception $e) {
+                \Log::error('Error al enviar notificación o procesar unión', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e; // Re-lanzar para rollback
+            }
+        });
+    
+        return response()->json([
+            'message' => 'Te has unido al equipo exitosamente'
+        ]);
+    }
 
     private function sendTeamNotification($match, $title, $message)
     {
