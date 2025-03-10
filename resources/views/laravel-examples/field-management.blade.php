@@ -21,9 +21,9 @@
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">NOMBRE</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">TIPO</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">MUNICIPIO</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">PRECIO/HORA</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">PRECIO/PARTIDO</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">ESTADO</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">ACCIONES</th>
+                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">ACCIONES</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -36,11 +36,9 @@
                                         <p class="text-xs font-weight-bold mb-0">{{ $field->name }}</p>
                                     </td>
                                     <td>
-                                        <!-- Mostrar los tipos como una lista separada por comas -->
                                         <p class="text-xs font-weight-bold mb-0">
                                             @if($field->types)
                                                 @php
-                                                    // Si $field->types es una cadena JSON, decodifícala; si es un arreglo, úsalo directamente
                                                     $types = is_string($field->types) ? json_decode($field->types, true) : (is_array($field->types) ? $field->types : []);
                                                     $typeLabels = [];
                                                     if (is_array($types) && !empty($types)) {
@@ -78,6 +76,7 @@
                                             {{ $field->is_active ? 'Activa' : 'Inactiva' }}
                                         </span> 
                                     </td>
+                                  
                                     <td class="text-center">
                                         <a href="{{ route('field-management.edit', $field->id) }}" class="mx-1">
                                             <i class="fas fa-edit text-secondary"></i>

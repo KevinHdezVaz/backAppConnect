@@ -11,43 +11,43 @@
     padding: 20px;
     border-radius: 5px;
     text-align: center;
-    z-index: 1010; /* Aumentado para estar encima de todo */
+    z-index: 1010;
 }
 
 #map {
     height: 400px;
     width: 100%;
     position: relative;
-    z-index: 1005; /* Mapa en frente, pero detrás del autocompletado y spinner */
+    z-index: 1005;
 }
 
 .modal-content {
     position: relative;
-    z-index: 1000; /* Modal detrás del mapa y resultados */
+    z-index: 1000;
 }
 
 #searchLocation {
     position: relative;
-    z-index: 1020; /* Input de búsqueda en el frente para autocompletado, aumentado para mayor prioridad */
+    z-index: 1020;
 }
 
 /* Estilo para los resultados de autocompletado de Google Places */
 .pac-container {
-    z-index: 1030 !important; /* Aumentado para asegurar que los resultados estén en el frente absoluto */
+    z-index: 1030 !important;
     position: absolute;
-    top: 100% !important; /* Posiciona los resultados justo debajo del input */
+    top: 100% !important;
     left: 0 !important;
 }
 
 /* Asegura que el mapa no tape los resultados y que sea interactivo */
 #mapModal .modal-body {
     padding: 0;
-    overflow: visible; /* Permite que los elementos sobresalgan del modal si es necesario */
+    overflow: visible;
 }
 
 /* Evitar que el formulario principal se envíe con Enter en el input de búsqueda */
 #searchLocation {
-    outline: none; /* Opcional: mejora visual */
+    outline: none;
 }
 
 /* Asegúrate de que los marcadores y elementos del mapa sean interactivos */
@@ -143,7 +143,7 @@
         <div class="form-group">
             <label for="municipio">Municipio</label>
             <input type="text" name="municipio" class="form-control @error('municipio') is-invalid @enderror" 
-                   value="{{ old('municipio', $field->municipio ?? '') }}" required>
+                   value="{{ old('municipio') }}" required>
             @error('municipio')
                 <div class="invalid-feedback">{{ $message }}</div>
             @enderror
@@ -159,7 +159,7 @@
                 <input type="number" name="price_per_match" step="0.01" 
                        class="form-control @error('price_per_match') is-invalid @enderror" value="{{ old('price_per_match') }}" required>
                 @error('price_per_match')
-                    <div class="invalid-feedback">{{ $message }}</div> <!-- Corregido de $methodage a $message -->
+                    <div class="invalid-feedback">{{ $message }}</div>
                 @enderror
             </div>
         </div>
@@ -167,7 +167,7 @@
 </div>
 
                 <div class="row mb-3">
-    <div class="col-md-4"> <!-- Reducimos el ancho a la mitad -->
+    <div class="col-md-4">
         <div class="form-group">
             <label for="location">Ubicación</label>
             <div>
@@ -183,7 +183,7 @@
         </div>
     </div>
 </div>
-</div>
+
 <div class="row">
     <div class="col-md-6">
         <div class="form-group">
@@ -262,20 +262,10 @@
                     @enderror
                 </div>
 
+                <!-- Mensaje opcional sobre horarios -->
                 <div class="form-group">
                     <label>Horarios Disponibles</label>
-                    <div class="mb-3">
-                        <div class="row">
-                            <div class="col-12">
-                                <p class="text-sm text-muted mb-2">Configura los horarios para cada día de la semana:</p>
-                            </div>
-                        </div>
-
-                        <!-- Configuración por día -->
-                        <div id="days-config">
-                            <!-- Los días se generarán dinámicamente por JavaScript -->
-                        </div>
-                    </div>
+                    <p class="text-muted">Los horarios disponibles se calculan automáticamente según los partidos registrados.</p>
                 </div>
 
                 <div class="form-group">
@@ -301,118 +291,6 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const daysConfig = {
-        monday: 'Lunes',
-        tuesday: 'Martes',
-        wednesday: 'Miércoles',
-        thursday: 'Jueves',
-        friday: 'Viernes',
-        saturday: 'Sábado',
-        sunday: 'Domingo'
-    };
-
-    // Inicializar todos los días
-    Object.keys(daysConfig).forEach(day => {
-        const container = document.getElementById('days-config');
-        container.innerHTML += createDayConfig(day, daysConfig[day]);
-    });
-
-    // Event listeners para los checkboxes y campos de tiempo
-    document.querySelectorAll('.day-enable').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const day = this.dataset.day;
-            const timeInputs = document.getElementById(`${day}_times`);
-            timeInputs.style.display = this.checked ? 'flex' : 'none';
-            updateAvailableHours();
-        });
-    });
-
-    document.querySelectorAll('.time-start, .time-end').forEach(input => {
-        input.addEventListener('change', updateAvailableHours);
-    });
-
-    // Función para crear la configuración de cada día
-    function createDayConfig(day, dayName) {
-        return `
-            <div class="day-config border rounded p-3 mb-3">
-                <div class="row align-items-center">
-                    <div class="col-md-3">
-                        <div class="form-check">
-                            <input class="form-check-input day-enable" type="checkbox" 
-                                   id="enable_${day}" data-day="${day}">
-                            <label class="form-check-label" for="enable_${day}">
-                                <strong>${dayName}</strong>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-md-9">
-                        <div class="row time-inputs" id="${day}_times" style="display: none;">
-                            <div class="col-md-5">
-                                <label class="form-label">Hora inicio</label>
-                                <input type="time" class="form-control time-start" 
-                                       data-day="${day}" value="10:00">
-                            </div>
-                            <div class="col-md-5">
-                                <label class="form-label">Hora fin</label>
-                                <input type="time" class="form-control time-end" 
-                                       data-day="${day}" value="22:00">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Función para generar los intervalos de tiempo
-    function generateTimeSlots(start, end) {
-        const slots = [];
-        let current = new Date(`2000-01-01T${start}`);
-        const endTime = new Date(`2000-01-01T${end}`);
-        
-        while (current <= endTime) {
-            slots.push(current.toTimeString().slice(0, 5));
-            current.setHours(current.getHours() + 1);
-        }
-        
-        return slots;
-    }
-
-    // Función para actualizar los horarios disponibles
-    
-    function updateAvailableHours() {
-    const availableHours = {};
-    
-    document.querySelectorAll('.day-enable:checked').forEach(checkbox => {
-        const day = checkbox.dataset.day;
-        const startTime = document.querySelector(`.time-start[data-day="${day}"]`).value;
-        const endTime = document.querySelector(`.time-end[data-day="${day}"]`).value;
-        
-        if (startTime && endTime) {
-            availableHours[day] = generateTimeSlots(startTime, endTime);
-        }
-    });
-
-    // Actualizar el campo oculto
-    let hiddenInput = document.getElementById('available_hours_input');
-    if (!hiddenInput) {
-        hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'available_hours';
-        hiddenInput.id = 'available_hours_input';
-        document.querySelector('form').appendChild(hiddenInput);
-    }
-    hiddenInput.value = JSON.stringify(availableHours); // Convertir a JSON una vez
-}
-
-
-    // Inicializar los horarios al cargar la página
-    updateAvailableHours();
-});
-</script>
-
-<script>
 let map;
 let marker;
 let geocoder;
@@ -421,7 +299,6 @@ function showMap() {
     const modal = new bootstrap.Modal(document.getElementById('mapModal'));
     modal.show();
     
-    // Verificar si el elemento existe antes de añadir el listener
     const mapModal = document.getElementById('mapModal');
     if (mapModal) {
         mapModal.addEventListener('shown.bs.modal', function () {
@@ -435,7 +312,6 @@ function showMap() {
 function initMap() {
     document.getElementById('location-loading').classList.remove('d-none');
 
-    // Primero intentamos obtener la ubicación actual con un timeout
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -448,15 +324,15 @@ function initMap() {
             },
             (error) => {
                 console.error('Error al obtener la ubicación:', error);
-                const defaultPosition = { lat: 19.29371244831551, lng: -99.19100707319005 }; // Ciudad de México
+                const defaultPosition = { lat: 19.29371244831551, lng: -99.19100707319005 };
                 alert('No se pudo obtener tu ubicación. Usando ubicación por defecto.');
                 initializeMapWithPosition(defaultPosition);
                 document.getElementById('location-loading').classList.add('d-none');
             },
-            { timeout: 10000 } // 10 segundos de espera máxima
+            { timeout: 10000 }
         );
     } else {
-        const defaultPosition = { lat: 19.29371244831551, lng: -99.19100707319005 }; // Ciudad de México
+        const defaultPosition = { lat: 19.29371244831551, lng: -99.19100707319005 };
         initializeMapWithPosition(defaultPosition);
         document.getElementById('location-loading').classList.add('d-none');
     }
@@ -479,12 +355,10 @@ function initializeMapWithPosition(position) {
     const searchInput = document.getElementById('searchLocation');
     const searchBox = new google.maps.places.SearchBox(searchInput);
 
-    // Ajustar los límites del SearchBox para que se actualicen con el mapa
     map.addListener('bounds_changed', function() {
         searchBox.setBounds(map.getBounds());
     });
 
-    // Manejar los resultados del SearchBox
     searchBox.addListener('places_changed', function() {
         const places = searchBox.getPlaces();
 
@@ -504,7 +378,7 @@ function initializeMapWithPosition(position) {
             position: place.geometry.location,
             map: map,
             animation: google.maps.Animation.DROP,
-            zIndex: 1015 // Marcador en frente, con z-index alto
+            zIndex: 1015
         });
 
         if (place.geometry.viewport) {
@@ -515,11 +389,10 @@ function initializeMapWithPosition(position) {
         }
     });
 
-    // Prevenir el envío del formulario principal al presionar Enter en #searchLocation
     searchInput.addEventListener('keypress', function(event) {
         if (event.key === 'Enter') {
-            event.preventDefault(); // Evita que el formulario principal se envíe
-            searchBox.set('query', this.value); // Realiza la búsqueda en el SearchBox
+            event.preventDefault();
+            searchBox.set('query', this.value);
         }
     });
 }
@@ -533,7 +406,7 @@ function placeMarker(location) {
         position: location,
         map: map,
         animation: google.maps.Animation.DROP,
-        zIndex: 1015 // Marcador en frente, con z-index alto
+        zIndex: 1015
     });
 
     geocoder.geocode({ location: location }, (results, status) => {

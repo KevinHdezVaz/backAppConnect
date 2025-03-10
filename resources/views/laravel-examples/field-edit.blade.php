@@ -183,12 +183,23 @@
 
                 <div class="form-group">
                     <label>Horarios Disponibles</label>
-                    <div class="mb-3">
-                        <div id="days-config">
-                            <!-- Los días se generarán dinámicamente por JavaScript -->
-                        </div>
+                    <p class="text-muted">Los horarios disponibles se calculan automáticamente según los partidos registrados.</p>
+                    <div class="mt-2">
+                        @if(isset($field->calculated_available_hours))
+                            @foreach($field->calculated_available_hours as $day => $hours)
+                                <h6>{{ ucfirst($day) }}</h6>
+                                <ul class="list-group">
+                                    @foreach($hours as $hour)
+                                        <li class="list-group-item">{{ $hour }}</li>
+                                    @endforeach
+                                </ul>
+                            @endforeach
+                        @else
+                            <p>No hay horarios disponibles calculados aún.</p>
+                        @endif
                     </div>
                 </div>
+
                 <div class="form-group">
     <label for="images">Imágenes Actuales</label>
     <div class="row mb-3">
@@ -223,6 +234,7 @@
         <div class="invalid-feedback">{{ $message }}</div>
     @enderror
 </div>
+
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" name="is_active" {{ $field->is_active ? 'checked' : '' }}>
                     <label class="form-check-label">Cancha Activa</label>
@@ -276,7 +288,7 @@ function previewImages(input) {
 
     const files = input.files;
     const container = document.getElementById('image-preview-container');
-    container.innerHTML = ''; // Limpiar previsualizaciones anteriores
+    container.innerHTML = '';
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -307,128 +319,11 @@ function removePreview(button) {
     button.closest('.col-md-3').remove();
 }
 
-// Código principal
 document.addEventListener('DOMContentLoaded', function () {
-    // Event listener para vista previa de imágenes
     document.querySelector('input[name="images[]"]').addEventListener('change', function() {
         previewImages(this);
     });
 
-    const daysConfig = {
-        monday: 'Lunes',
-        tuesday: 'Martes',
-        wednesday: 'Miércoles',
-        thursday: 'Jueves',
-        friday: 'Viernes',
-        saturday: 'Sábado',
-        sunday: 'Domingo'
-    };
-
-    const existingHours = @json($field->available_hours);
-
-    Object.keys(daysConfig).forEach(day => {
-        const container = document.getElementById('days-config');
-        container.innerHTML += createDayConfig(day, daysConfig[day], existingHours[day] || []);
-    });
-
-    Object.keys(existingHours).forEach(day => {
-        const checkbox = document.querySelector(`#enable_${day}`);
-        if (checkbox && existingHours[day].length > 0) {
-            checkbox.checked = true;
-            document.getElementById(`${day}_times`).style.display = 'flex';
-        }
-    });
-
-    document.querySelectorAll('.day-enable').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const day = this.dataset.day;
-            const timeInputs = document.getElementById(`${day}_times`);
-            timeInputs.style.display = this.checked ? 'flex' : 'none';
-            updateAvailableHours();
-        });
-    });
-
-    document.querySelectorAll('.time-start, .time-end').forEach(input => {
-        input.addEventListener('change', updateAvailableHours);
-    });
-
-    function createDayConfig(day, dayName, hours = []) {
-        const startTime = hours[0] || '10:00';
-        const endTime = hours[hours.length - 1] || '22:00';
-
-        return `
-            <div class="day-config border rounded p-3 mb-3">
-                <div class="row align-items-center">
-                    <div class="col-md-3">
-                        <div class="form-check">
-                            <input class="form-check-input day-enable" type="checkbox" 
-                                   id="enable_${day}" data-day="${day}">
-                            <label class="form-check-label" for="enable_${day}">
-                                <strong>${dayName}</strong>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-md-9">
-                        <div class="row time-inputs" id="${day}_times" style="display: none;">
-                            <div class="col-md-5">
-                                <label class="form-label">Hora inicio</label>
-                                <input type="time" class="form-control time-start" 
-                                       data-day="${day}" value="${startTime}">
-                            </div>
-                            <div class="col-md-5">
-                                <label class="form-label">Hora fin</label>
-                                <input type="time" class="form-control time-end" 
-                                       data-day="${day}" value="${endTime}">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function generateTimeSlots(start, end) {
-        const slots = [];
-        let current = new Date(`2000-01-01T${start}`);
-        const endTime = new Date(`2000-01-01T${end}`);
-        
-        while (current <= endTime) {
-            slots.push(current.toTimeString().slice(0, 5));
-            current.setHours(current.getHours() + 1);
-        }
-        
-        return slots;
-    }
-
-    function updateAvailableHours() {
-    const availableHours = {};
-    
-    document.querySelectorAll('.day-enable:checked').forEach(checkbox => {
-        const day = checkbox.dataset.day;
-        const startTime = document.querySelector(`.time-start[data-day="${day}"]`).value;
-        const endTime = document.querySelector(`.time-end[data-day="${day}"]`).value;
-        
-        if (startTime && endTime) {
-            availableHours[day] = generateTimeSlots(startTime, endTime);
-        }
-    });
-
-    // Actualizar el campo oculto
-    let hiddenInput = document.getElementById('available_hours_input');
-    if (!hiddenInput) {
-        hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'available_hours';
-        hiddenInput.id = 'available_hours_input';
-        document.querySelector('form').appendChild(hiddenInput);
-    }
-    hiddenInput.value = JSON.stringify(availableHours); // Convertir a JSON una vez
-}
-
-    // Inicializar los horarios al cargar la página
-    updateAvailableHours();
-
-    // Actualizar la visualización de los tipos seleccionados al cambiar los checkboxes
     const typeCheckboxes = document.querySelectorAll('input[name="types[]"]');
     const typesDisplay = document.getElementById('types-display');
 

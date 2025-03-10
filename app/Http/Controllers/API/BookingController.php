@@ -1,9 +1,10 @@
 <?php
- namespace App\Http\Controllers\API;
+namespace App\Http\Controllers\API;
 
 use Carbon\Carbon;
 use App\Models\Field;
 use App\Models\Booking;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use App\Services\WalletService;
 use App\Http\Controllers\Controller;
@@ -11,11 +12,11 @@ use App\Services\MercadoPagoService;
 
 class BookingController extends Controller 
 {
-
     protected $mercadoPagoService;
     protected $walletService;
 
-    public function __construct(MercadoPagoService $mercadoPagoService, WalletService $walletService)    {
+    public function __construct(MercadoPagoService $mercadoPagoService, WalletService $walletService)    
+    {
         $this->mercadoPagoService = $mercadoPagoService;
         $this->walletService = $walletService;  
     }
@@ -29,18 +30,18 @@ class BookingController extends Controller
         return response()->json($bookings);
     }
 
-   
     public function checkPaymentExists($paymentId)
-{
-    $booking = Booking::where('payment_id', $paymentId)->first();
-    
-    return response()->json([
-        'exists' => $booking !== null,
-        'booking_id' => $booking ? $booking->id : null,
-        'message' => $booking ? 'Reserva encontrada con este ID de pago' : 'No se encontró ninguna reserva con este ID de pago'
-    ]);
-}
-public function store(Request $request)
+    {
+        $booking = Booking::where('payment_id', $paymentId)->first();
+        
+        return response()->json([
+            'exists' => $booking !== null,
+            'booking_id' => $booking ? $booking->id : null,
+            'message' => $booking ? 'Reserva encontrada con este ID de pago' : 'No se encontró ninguna reserva con este ID de pago'
+        ]);
+    }
+
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'field_id' => 'required|exists:fields,id',
@@ -73,7 +74,7 @@ public function store(Request $request)
             $totalPrice = floatval($field->price_per_match);
             $amountToPay = $totalPrice;
             $paymentMethod = 'mercadopago';
-            $paymentId = $request->input('payment_id'); // Usar input() para evitar undefined key
+            $paymentId = $request->input('payment_id');
 
             // Si se usa el monedero
             if ($request->input('use_wallet', false)) {
@@ -146,68 +147,52 @@ public function store(Request $request)
         }
     }
 
-public function getAvailableHours(Field $field, Request $request)
-{
-    // Validar la fecha
-    $request->validate([
-        'date' => 'required|date_format:Y-m-d',
-    ]);
+    public function getAvailableHours(Field $field, Request $request)
+    {
+        // Validar la fecha
+        $request->validate([
+            'date' => 'required|date_format:Y-m-d',
+        ]);
 
-    $date = Carbon::parse($request->date);
-    $dayOfWeek = strtolower($date->format('l'));  // Obtiene el día de la semana en minúsculas
+        $date = Carbon::parse($request->date);
+        $dayOfWeek = strtolower($date->format('l')); // Día de la semana en minúsculas (monday, tuesday, etc.)
 
-    \Log::info('Requesting available hours', [
-        'field_id' => $field->id,
-        'date' => $request->date,
-        'day_of_week' => $dayOfWeek
-    ]);
+        \Log::info('Requesting available hours', [
+            'field_id' => $field->id,
+            'date' => $request->date,
+            'day_of_week' => $dayOfWeek
+        ]);
 
-    // Verificar si la fecha es pasada (excepto hoy)
-    if ($date->isPast() && !$date->isToday()) {
-        return response()->json([]); // Devuelve un array vacío
-    }
-
-    $availableHours = [];
-    $storedHours = $field->available_hours;
-
-    // Verificar si hay horarios almacenados para el día solicitado
-    if (isset($storedHours[$dayOfWeek])) {
-        foreach ($storedHours[$dayOfWeek] as $hour) {
-            $startTime = Carbon::parse($date->format('Y-m-d') . ' ' . $hour);
-            $endTime = $startTime->copy()->addMinutes(60);
-
-            // Filtrar horas pasadas para el día actual
-            if ($date->isToday() && $startTime->isPast()) {
-                continue;
-            }
-
-            // Verificar si el horario está disponible
-            if ($this->checkAvailability($field->id, $startTime, $endTime)) {
-                $availableHours[] = $hour;
-            }
+        // Verificar si la fecha es pasada (excepto hoy)
+        if ($date->isPast() && !$date->isToday()) {
+            return response()->json(['available_hours' => []]);
         }
+
+        // Obtener los horarios disponibles usando el método del modelo Field
+        $availableHoursByDay = $field->getAvailableHours($request->date);
+
+        // Extraer los horarios del día solicitado
+        $availableHours = $availableHoursByDay[$dayOfWeek] ?? [];
+
+        \Log::info('Filtered available hours', [
+            'available_hours' => $availableHours,
+        ]);
+
+        return response()->json(['available_hours' => array_values($availableHours)]);
     }
 
-    \Log::info('Filtered available hours', [
-        'available_hours' => $availableHours,
-    ]);
+    private function checkAvailability($fieldId, $startTime, $endTime) 
+    {
+        return !Booking::where('field_id', $fieldId)
+            ->where('status', '!=', 'cancelled')
+            ->where(function($query) use ($startTime, $endTime) {
+                $query->whereBetween('start_time', [$startTime, $endTime])
+                    ->orWhereBetween('end_time', [$startTime, $endTime])
+                    ->orWhereRaw('? BETWEEN start_time AND end_time', [$startTime]);
+            })->exists();
+    }
 
-     return response()->json(array_values($availableHours));
-
-}
-
-
-private function checkAvailability($fieldId, $startTime, $endTime) 
-{
-    return !Booking::where('field_id', $fieldId)
-        ->where('status', '!=', 'cancelled')
-        ->where(function($query) use ($startTime, $endTime) {
-            $query->whereBetween('start_time', [$startTime, $endTime])
-                ->orWhereBetween('end_time', [$startTime, $endTime]);
-        })->exists();
-}
-   
-public function cancel(Booking $booking, Request $request) 
+    public function cancel(Booking $booking, Request $request) 
     {
         if ($booking->user_id !== auth()->id()) {
             return response()->json(['message' => 'No autorizado'], 403);
@@ -225,7 +210,7 @@ public function cancel(Booking $booking, Request $request)
         $booking->update([
             'status' => 'cancelled',
             'cancellation_reason' => $request->input('reason'),
-            'payment_status' => 'refunded', // Actualiza el estado del pago
+            'payment_status' => 'refunded',
         ]);
 
         // Reembolsar al monedero
@@ -261,24 +246,22 @@ public function cancel(Booking $booking, Request $request)
     
         return response()->json($bookings);
     }
-    
-
 
     public function getReservationHistory()
-{
-    $bookings = auth()->user()->bookings()
-        ->with('field')
-        ->where(function($query) {
-            $query->where('status', 'completed')
-                ->orWhere('status', 'cancelled')
-                ->orWhere(function($q) {
-                    $q->where('end_time', '<', now())
-                      ->where('status', '!=', 'pending'); // No mostrar pendientes en el historial
-                });
-        })
-        ->orderBy('start_time', 'desc')
-        ->get();
+    {
+        $bookings = auth()->user()->bookings()
+            ->with('field')
+            ->where(function($query) {
+                $query->where('status', 'completed')
+                    ->orWhere('status', 'cancelled')
+                    ->orWhere(function($q) {
+                        $q->where('end_time', '<', now())
+                          ->where('status', '!=', 'pending');
+                    });
+            })
+            ->orderBy('start_time', 'desc')
+            ->get();
 
-    return response()->json($bookings);
-}
+        return response()->json($bookings);
+    }
 }
