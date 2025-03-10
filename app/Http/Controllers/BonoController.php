@@ -19,28 +19,128 @@ class BonoController extends Controller
     public function __construct(MercadoPagoService $mercadoPagoService)
     {
         $this->mercadoPagoService = $mercadoPagoService;
+        $this->middleware('auth:admin')->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
     }
 
-    /**
-     * Obtener todos los bonos disponibles
-     */
+    public function getBonos()
+{
+    try {
+        $bonos = Bono::where('is_active', true)->get();
+        Log::info('Bonos obtenidos para API', ['count' => $bonos->count()]);
+        return response()->json($bonos);
+    } catch (\Exception $e) {
+        Log::error('Error al obtener bonos para API', ['error' => $e->getMessage()]);
+        return response()->json(['message' => 'Error al obtener los bonos'], 500);
+    }
+}
+
     public function index()
     {
-        $bonos = Bono::where('is_active', true)->get();
-        return response()->json($bonos);
+        $bonos = Bono::all();
+        return view('laravel-examples.field-listBono', compact('bonos'));
     }
 
-    /**
-     * Obtener un bono específico
-     */
+    public function create()
+    {
+        return view('bonos.create');
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'titulo' => 'required|string|max:255',
+            'tipo' => 'required|string|max:255',
+            'descripcion' => 'required|string',
+            'precio' => 'required|numeric|min:0',
+            'duracion_dias' => 'required|integer|min:1',
+            'usos_totales' => 'nullable|integer|min:0',
+            'caracteristicas' => 'nullable|string',
+            'is_active' => 'boolean',
+        ]);
+
+        try {
+            $validated['caracteristicas'] = array_filter(array_map('trim', explode(',', $request->caracteristicas)));
+            Bono::create($validated);
+
+            return redirect()->route('bonos.index')->with('success', 'Bono creado exitosamente');
+        } catch (\Exception $e) {
+            Log::error('Error al crear bono: ' . $e->getMessage());
+            return back()->with('error', 'Error al crear el bono');
+        }
+    }
+
+    public function edit(Bono $bono)
+    {
+        return view('laravel-examples.field-editBono', compact('bono'));
+    }
+
+   
+    
+    public function update(Request $request, Bono $bono)
+{
+    Log::info('Iniciando actualización de bono', ['bono_id' => $bono->id, 'request_data' => $request->all()]);
+
+    try {
+        $validated = $request->validate([
+            'titulo' => 'required|string|max:255',
+            'tipo' => 'required|string|max:255',
+            'descripcion' => 'required|string',
+            'precio' => 'required|numeric|min:0',
+            'duracion_dias' => 'required|integer|min:1',
+            'usos_totales' => 'nullable|integer|min:0',
+            'caracteristicas' => 'nullable|string',
+            'is_active' => 'nullable|in:on,off', // Ajustado para aceptar "on" o "off"
+        ]);
+
+        Log::info('Datos validados exitosamente', ['validated_data' => $validated]);
+
+        // Convertir "on" a booleano para la base de datos
+        $validated['is_active'] = $request->input('is_active') === 'on';
+        $validated['caracteristicas'] = array_filter(array_map('trim', explode(',', $request->caracteristicas ?? '')));
+        
+        Log::info('Características procesadas e is_active convertido', [
+            'caracteristicas' => $validated['caracteristicas'],
+            'is_active' => $validated['is_active']
+        ]);
+
+        $bono->update($validated);
+        Log::info('Bono actualizado en la base de datos', ['bono_id' => $bono->id]);
+
+        return redirect()->route('bonos.index')->with('success', 'Bono actualizado exitosamente');
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::error('Error de validación al actualizar bono', [
+            'bono_id' => $bono->id,
+            'errors' => $e->errors(),
+            'request_data' => $request->all()
+        ]);
+        return back()->withErrors($e->errors())->withInput();
+    } catch (\Exception $e) {
+        Log::error('Error general al actualizar bono', [
+            'bono_id' => $bono->id,
+            'error_message' => $e->getMessage(),
+            'stack_trace' => $e->getTraceAsString()
+        ]);
+        return back()->with('error', 'Error al actualizar el bono');
+    }
+}
+
+
+    public function destroy(Bono $bono)
+    {
+        try {
+            $bono->delete();
+            return redirect()->route('bonos.index')->with('success', 'Bono eliminado exitosamente');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar bono: ' . $e->getMessage());
+            return back()->with('error', 'Error al eliminar el bono');
+        }
+    }
+
     public function show(Bono $bono)
     {
         return response()->json($bono);
     }
 
-    /**
-     * Crear una preferencia de pago para un bono
-     */
     public function createPreference(Request $request)
     {
         $validated = $request->validate([
@@ -69,8 +169,8 @@ class BonoController extends Controller
                 'external_reference' => "bono_{$bono->id}_user_{$user->id}",
                 'notification_url' => 'https://proyect.aftconta.mx/api/webhook/mercadopago',
                 'payer' => [
-                    'name' => $user->name, // Asumiendo que el usuario tiene un campo name
-                    'email' => $user->email, // Asumiendo que el usuario tiene un campo email
+                    'name' => $user->name,
+                    'email' => $user->email,
                 ],
             ];
 
@@ -86,9 +186,6 @@ class BonoController extends Controller
         }
     }
 
-    /**
-     * Comprar un bono
-     */
     public function comprar(Request $request)
     {
         $validated = $request->validate([
@@ -99,7 +196,6 @@ class BonoController extends Controller
     
         try {
             return \DB::transaction(function() use ($validated, $request) {
-                // Verificar si ya existe un UserBono con este pago
                 $existingUserBono = UserBono::where('payment_id', $validated['payment_id'])->first();
                 if ($existingUserBono) {
                     return response()->json([
@@ -108,7 +204,6 @@ class BonoController extends Controller
                     ], 200);
                 }
     
-                // Verificar si ya existe un bono activo del mismo tipo
                 $existingActiveBonoByType = UserBono::where('user_id', auth()->id())
                     ->where('bono_id', $validated['bono_id'])
                     ->where('estado', 'activo')
@@ -171,9 +266,6 @@ class BonoController extends Controller
         }
     }
 
-    /**
-     * Obtener los bonos activos del usuario autenticado
-     */
     public function misBonos()
     {
         $userBonos = UserBono::with('bono')
@@ -186,9 +278,6 @@ class BonoController extends Controller
         return response()->json($userBonos);
     }
 
-    /**
-     * Obtener el historial de bonos del usuario (activos, expirados, cancelados)
-     */
     public function historialBonos()
     {
         $userBonos = UserBono::with('bono')
@@ -199,9 +288,6 @@ class BonoController extends Controller
         return response()->json($userBonos);
     }
 
-    /**
-     * Usar un bono para una reserva
-     */
     public function usarBono(Request $request)
     {
         $validated = $request->validate([
@@ -245,9 +331,6 @@ class BonoController extends Controller
         }
     }
 
-    /**
-     * Cancelar un bono específico (propiedad del usuario)
-     */
     public function cancelarBono(UserBono $userBono)
     {
         if ($userBono->user_id !== auth()->id()) {
@@ -262,9 +345,6 @@ class BonoController extends Controller
         ]);
     }
 
-    /**
-     * Verificar la validez de un código de bono
-     */
     public function verificarCodigo(Request $request)
     {
         $request->validate(['codigo' => 'required|string']);

@@ -55,9 +55,9 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json($order);
     });
 
-Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
-    Route::get('/bonos', [BonoController::class, 'index']);
-    Route::get('/bonos/{bono}', [BonoController::class, 'show']);
+    Route::get('/bonos', [BonoController::class, 'getBonos']); // Mantener solo esta
+ Route::get('/bonos/mis-bonos', [BonoController::class, 'misBonos']);
+     Route::get('/bonos/{bono}', [BonoController::class, 'show']);
     Route::post('/bonos/create-preference', [BonoController::class, 'createPreference']); // Nueva ruta
     Route::post('/bonos/comprar', [BonoController::class, 'comprar']);
     Route::get('/mis-bonos', [BonoController::class, 'misBonos']);

@@ -1,5 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\BonoController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
 use App\Http\Controllers\StoryController;
@@ -148,6 +149,8 @@ Route::put('/product/{id}', [ProductTiendaController::class, 'update'])->name('p
     Route::put('/field-management/{id}', [FieldManagementController::class, 'update'])->name('field-management.update');
     Route::delete('/field-management/{id}', [FieldManagementController::class, 'destroy'])->name('field-management.destroy');
 
+    Route::resource('bonos', BonoController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
+    
     Route::get('/logout', [SessionsController::class, 'destroy']);
     Route::get('/user-profile', [InfoUserController::class, 'create']);
     Route::post('/user-profile', [InfoUserController::class, 'store']);

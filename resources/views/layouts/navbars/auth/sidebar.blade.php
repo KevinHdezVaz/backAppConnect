@@ -1,4 +1,3 @@
-
 <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-0 fixed-start ms-3"
        style="position: fixed; top: 0; left: 0; bottom: 0; width: 250px; background-color: white;">
   <div class="sidenav-header">
@@ -36,90 +35,93 @@
       </li>
 
       <li class="nav-item pb-2">
-    <a class="nav-link {{ (Request::is('user-management') ? 'active' : '') }}" href="{{ url('user-management') }}">
-        <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+        <a class="nav-link {{ (Request::is('user-management') ? 'active' : '') }}" href="{{ url('user-management') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('user-management') ? 'fa-users text-white' : 'fa-user text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
-        </div>
-        <span class="nav-link-text ms-1">Usuarios</span>
-    </a>
-</li>
+          </div>
+          <span class="nav-link-text ms-1">Usuarios</span>
+        </a>
+      </li>
 
-
-
-<li class="nav-item">
-    <a class="nav-link {{ (Request::is('banner') ? 'active' : '') }}" href="{{ url('banner') }}">
-        <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+      <li class="nav-item">
+        <a class="nav-link {{ (Request::is('banner') ? 'active' : '') }}" href="{{ url('banner') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <i style="font-size: 1rem;" class="fas fa-lg fa-image ps-2 pe-2 text-center {{ (Request::is('banner') ? 'text-white' : 'text-dark') }}" aria-hidden="true"></i>
-        </div>
-        <span class="nav-link-text ms-1">Banner</span>
-    </a>
-</li>
+          </div>
+          <span class="nav-link-text ms-1">Banner</span>
+        </a>
+      </li>
 
-
-<li class="nav-item pb-2">
-    <a class="nav-link {{ (Request::is('field-management') ? 'active' : '') }}" href="{{ url('field-management') }}">
-        <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+      <li class="nav-item pb-2">
+        <a class="nav-link {{ (Request::is('field-management') ? 'active' : '') }}" href="{{ url('field-management') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('field-management') ? 'fa-futbol text-white' : 'fa-th-large text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
-        </div>
-        <span class="nav-link-text ms-1">Canchas</span>
-    </a>
-</li>
+          </div>
+          <span class="nav-link-text ms-1">Canchas</span>
+        </a>
+      </li>
 
-        <li class="nav-item pb-2">
-            <a class="nav-link {{ (Request::is('daily-matches') ? 'active' : '') }}" href="{{ url('daily-matches') }}">
-                <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
-                    <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('daily-matches') ? 'fa-futbol text-white' : 'fa-futbol text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
-                </div>
-                <span class="nav-link-text ms-1">Partidos</span>
-            </a>
-        </li>
+      <li class="nav-item pb-2">
+        <a class="nav-link {{ (Request::is('daily-matches') ? 'active' : '') }}" href="{{ url('daily-matches') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+            <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('daily-matches') ? 'fa-futbol text-white' : 'fa-futbol text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
+          </div>
+          <span class="nav-link-text ms-1">Partidos</span>
+        </a>
+      </li>
 
-<li class="nav-item pb-2">
-    <a class="nav-link {{ (Request::is('tournament') ? 'active' : '') }}" href="{{ url('tournament') }}">
-        <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+      <li class="nav-item pb-2">
+        <a class="nav-link {{ (Request::is('tournament') ? 'active' : '') }}" href="{{ url('tournament') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('tournament') ? 'fa-trophy text-white' : 'fa-medal text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
-        </div>
-        <span class="nav-link-text ms-1">Torneos</span>
-    </a>
-</li>
+          </div>
+          <span class="nav-link-text ms-1">Torneos</span>
+        </a>
+      </li>
 
-
+   <!-- Enlace a Bonos -->
+   <li class="nav-item pb-2">
+        <a class="nav-link {{ (Request::is('bonos') ? 'active' : '') }}" href="{{ url('bonos') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+            <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('bonos') ? 'fa-ticket-alt text-white' : 'fa-ticket-alt text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
+          </div>
+          <span class="nav-link-text ms-1">Bonos</span>
+        </a>
+      </li>
       <li class="nav-item mt-2">
         <h6 class="ps-4 ms-2 text-uppercase text-xs font-weight-bolder opacity-6">Otros</h6>
       </li>
 
-
       <li class="nav-item">
-      <a class="nav-link {{ (Request::is('notifications') ? 'active' : '') }}" href="{{ url('notifications') }}">
-      <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+        <a class="nav-link {{ (Request::is('notifications') ? 'active' : '') }}" href="{{ url('notifications') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <i style="font-size: 1rem;" class="fas fa-lg fa-bell ps-2 pe-2 text-center {{ (Request::is('notifications') ? 'text-white' : 'text-dark') }}" aria-hidden="true"></i>
-        </div>
-        <span class="nav-link-text ms-1">Notificaciones</span>
-    </a>
+          </div>
+          <span class="nav-link-text ms-1">Notificaciones</span>
+        </a>
+      </li>
 
-    <li class="nav-item pb-2">
-    <a class="nav-link {{ (Request::is('product') ? 'active' : '') }}" href="{{ url('product') }}">
-        <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+      <li class="nav-item pb-2">
+        <a class="nav-link {{ (Request::is('product') ? 'active' : '') }}" href="{{ url('product') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('product') ? 'fa-shopping-cart text-white' : 'fa-shopping-cart text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
-        </div>
-        <span class="nav-link-text ms-1">Tienda</span>
-    </a>
-</li>
-
-   <li class="nav-item">
-    <a class="nav-link {{ (Request::is('stories') ? 'active' : '') }}" href="{{ url('stories') }}">
-        <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
-            <i style="font-size: 1rem;" class="fas fa-lg fa-history ps-2 pe-2 text-center {{ (Request::is('stories') ? 'text-white' : 'text-dark') }}" aria-hidden="true"></i>
-        </div>
-        <span class="nav-link-text ms-1">Historias</span>
-    </a>
-</li>
-</li>
-
-
+          </div>
+          <span class="nav-link-text ms-1">Tienda</span>
+        </a>
+      </li>
 
       <li class="nav-item">
-      <a class="nav-link {{ Request::is('billing') || Request::is('billing/*') ? 'active' : '' }}" href="{{ route('payments') }}">          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+        <a class="nav-link {{ (Request::is('stories') ? 'active' : '') }}" href="{{ url('stories') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+            <i style="font-size: 1rem;" class="fas fa-lg fa-history ps-2 pe-2 text-center {{ (Request::is('stories') ? 'text-white' : 'text-dark') }}" aria-hidden="true"></i>
+          </div>
+          <span class="nav-link-text ms-1">Historias</span>
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link {{ Request::is('billing') || Request::is('billing/*') ? 'active' : '' }}" href="{{ route('payments') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <svg width="12px" height="12px" viewBox="0 0 43 36" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
               <title>credit-card</title>
               <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
@@ -140,5 +142,4 @@
 
     </ul>
   </div>
-
 </aside>
