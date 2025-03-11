@@ -186,15 +186,23 @@ public function loginWithGoogle(Request $request)
 
 
 
-
 public function updateProfile(Request $request)
 {
     \Log::info('Request completo:', $request->all());
     \Log::info('Files:', $request->allFiles());
     
-    // Obtener el usuario
+    // Obtener el usuario autenticado
     $user = $request->user();
-    
+
+    // Validar los datos enviados desde el frontend
+    $validated = $request->validate([
+        'name' => 'sometimes|string|max:255',
+        'phone' => 'sometimes|string|max:255',
+        'codigo_postal' => 'sometimes|string|max:255',
+        'posicion' => 'sometimes|string|max:255', // Validar la posición
+        'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', // Validar la imagen si se envía
+    ]);
+
     // Actualizar campos si existen en la solicitud
     if ($request->has('name')) {
         $user->name = $request->input('name');
@@ -206,10 +214,22 @@ public function updateProfile(Request $request)
         $user->codigo_postal = $request->input('codigo_postal');
     }
     if ($request->has('posicion')) {
-        $user->posicion = $request->input('posicion');
+        $user->posicion = $request->input('posicion'); // Actualizar la posición
     }
 
-    // Guardar los cambios
+    // Manejar la subida de la imagen de perfil si se envía
+    if ($request->hasFile('profile_image')) {
+        try {
+            $path = $request->file('profile_image')->store('profiles', 'public');
+            $user->profile_image = $path;
+            \Log::info('Imagen subida:', ['path' => $path]);
+        } catch (\Exception $e) {
+            \Log::error('Error al subir la imagen:', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Error al subir la imagen'], 500);
+        }
+    }
+
+    // Guardar los cambios en la base de datos
     $user->save();
     
     \Log::info('Usuario actualizado:', $user->toArray());

@@ -316,7 +316,7 @@ public function index()
                                 ->where('start_time', '>=', $now->format('H:i:s'));
                       });
             })
-            ->whereIn('status', ['open', 'full']) // Incluir tanto 'open' como 'full'
+            ->whereIn('status', ['open', 'full','reserved']) // Incluir tanto 'open' como 'full'
             ->orderBy('schedule_date')
             ->orderBy('start_time')
             ->get();
@@ -324,6 +324,40 @@ public function index()
         return response()->json([
             'matches' => $matches
         ]);
+    }
+    
+    public function checkMatch(Request $request)
+    {
+        $request->validate([
+            'field_id' => 'required|exists:fields,id',
+            'date' => 'required|date',
+            'start_time' => 'required|date_format:H:i',
+        ]);
+    
+        $match = DailyMatch::where('field_id', $request->field_id)
+            ->where('schedule_date', $request->date)
+            ->where('start_time', $request->start_time . ':00')
+            ->first();
+    
+        if ($match) {
+            // Calcular el total de jugadores desde match_teams
+            $totalPlayers = MatchTeam::where('equipo_partido_id', $match->id)
+                ->sum('player_count');
+            
+            // Calcular el total máximo de jugadores
+            $totalMaxPlayers = MatchTeam::where('equipo_partido_id', $match->id)
+                ->sum('max_players');
+    
+            return response()->json([
+                'id' => $match->id,
+                'name' => $match->name,
+                'status' => $match->status,
+                'player_count' => (int) $totalPlayers, // Forzar entero
+                'max_players' => (int) $totalMaxPlayers, // Forzar entero
+            ]);
+        } else {
+            return response()->json(null, 404);
+        }
     }
     public function joinMatch(Request $request, DailyMatch $match)
     {

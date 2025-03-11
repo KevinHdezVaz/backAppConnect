@@ -43,110 +43,155 @@ class BookingController extends Controller
     }
 
     public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'field_id' => 'required|exists:fields,id',
-            'date' => 'required|date|after_or_equal:today',
-            'start_time' => 'required|date_format:H:i',
-            'players_needed' => 'nullable|integer',
-            'allow_joining' => 'boolean',
-            'payment_id' => 'nullable|string',
-            'order_id' => 'nullable|exists:orders,id',
-            'use_wallet' => 'boolean',
+{
+    $validated = $request->validate([
+        'field_id' => 'required|exists:fields,id',
+        'date' => 'required|date|after_or_equal:today',
+        'start_time' => 'required|date_format:H:i',
+        'players_needed' => 'nullable|integer',
+        'allow_joining' => 'boolean',
+        'payment_id' => 'nullable|string',
+        'order_id' => 'nullable|exists:orders,id',
+        'use_wallet' => 'boolean',
+    ]);
+
+    try {
+        // Verificar si ya existe una reserva con este payment_id
+        if (!empty($request->input('payment_id'))) {
+            $existingBooking = Booking::where('payment_id', $request->input('payment_id'))->first();
+            if ($existingBooking) {
+                return response()->json($existingBooking->load('field'), 200);
+            }
+        }
+
+        $field = Field::findOrFail($validated['field_id']);
+        
+        // Normalizar start_time a H:i:s
+        $startTimeRaw = $validated['start_time'];
+        if (strlen($startTimeRaw) == 5) { // H:i (ej. 19:00)
+            $startTimeRaw .= ':00'; // H:i:s (ej. 19:00:00)
+        }
+        $scheduleDate = $validated['date'];
+        $startTime = $scheduleDate . ' ' . $startTimeRaw;
+        $endTime = date('Y-m-d H:i:s', strtotime($startTime . ' +1 hour'));
+
+        \Log::info('Datos de entrada', [
+            'field_id' => $field->id,
+            'schedule_date' => $scheduleDate,
+            'start_time_raw' => $startTimeRaw,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
         ]);
 
-        try {
-            // Verificar si ya existe una reserva con este payment_id (solo si se proporcionó)
-            if (!empty($request->input('payment_id'))) {
-                $existingBooking = Booking::where('payment_id', $request->input('payment_id'))->first();
-                if ($existingBooking) {
-                    return response()->json($existingBooking->load('field'), 200);
-                }
+        // Buscar el partido en DailyMatch
+        $match = DailyMatch::where('field_id', $field->id)
+            ->where('schedule_date', $scheduleDate)
+            ->where('start_time', $startTimeRaw)
+            ->where('status', 'open')
+            ->first();
+
+        if ($match) {
+            // Verificar si el partido tiene jugadores registrados
+            if ($match->player_count > 0) {
+                \Log::info('No se puede reservar: el partido tiene jugadores', [
+                    'match_id' => $match->id,
+                    'player_count' => $match->player_count,
+                ]);
+                return response()->json([
+                    'message' => 'No se puede reservar este partido porque ya tiene jugadores registrados'
+                ], 422);
             }
 
-            $field = Field::findOrFail($validated['field_id']);
-            $startTime = Carbon::parse($validated['date'] . ' ' . $validated['start_time']);
-            $endTime = $startTime->copy()->addMinutes(60);
-
-            if (!$this->checkAvailability($field->id, $startTime, $endTime)) {
-                return response()->json(['message' => 'Horario no disponible'], 422);
-            }
-
-            $totalPrice = floatval($field->price_per_match);
-            $amountToPay = $totalPrice;
-            $paymentMethod = 'mercadopago';
-            $paymentId = $request->input('payment_id');
-
-            // Si se usa el monedero
-            if ($request->input('use_wallet', false)) {
-                $wallet = auth()->user()->wallet;
-                if ($wallet && $wallet->balance > 0) {
-                    if ($wallet->balance >= $totalPrice) {
-                        // Pago completo con monedero
-                        $this->walletService->withdraw(auth()->user(), $totalPrice, "Pago de reserva para {$field->name}");
-                        $amountToPay = 0;
-                        $paymentMethod = 'wallet';
-                        $paymentId = null; // No hay payment_id cuando se usa solo monedero
-                    } else {
-                        // Pago parcial con monedero
-                        $amountToPay -= $wallet->balance;
-                        $this->walletService->withdraw(auth()->user(), $wallet->balance, "Pago parcial con monedero para {$field->name}");
-                        $paymentMethod = 'mixed';
-                    }
-                }
-            }
-
-            // Si queda algo por pagar, validar con MercadoPago
-            if ($amountToPay > 0) {
-                if (empty($request->input('payment_id')) || empty($request->input('order_id'))) {
-                    return response()->json(['message' => 'Falta payment_id o order_id para pago con MercadoPago'], 422);
-                }
-
-                $order = Order::findOrFail($validated['order_id']);
-                if ($order->type !== 'booking' || $order->reference_id != $validated['field_id']) {
-                    return response()->json(['message' => 'Orden inválida para esta reserva'], 422);
-                }
-
-                if ($order->payment_id !== $request->input('payment_id') || $order->status !== 'completed') {
-                    $paymentInfo = $this->mercadoPagoService->getPaymentInfo($request->input('payment_id'));
-                    if ($paymentInfo['status'] !== 'approved') {
-                        return response()->json(['message' => 'El pago aún no ha sido aprobado'], 422);
-                    }
-                    $order->update([
-                        'payment_id' => $request->input('payment_id'),
-                        'status' => 'completed',
-                        'payment_details' => array_merge($order->payment_details, ['payment_info' => $paymentInfo]),
-                    ]);
-                }
-            }
-
-            $booking = Booking::create([
-                'user_id' => auth()->id(),
-                'field_id' => $field->id,
-                'start_time' => $startTime,
-                'end_time' => $endTime,
-                'total_price' => $totalPrice,
-                'status' => 'confirmed',
-                'players_needed' => $validated['players_needed'],
-                'allow_joining' => $validated['allow_joining'] ?? false,
-                'payment_id' => $paymentId,
-                'payment_status' => 'completed',
-                'payment_method' => $paymentMethod,
+            $match->update(['status' => 'reserved']);
+            \Log::info('Partido marcado como reservado', [
+                'match_id' => $match->id,
+                'booking_id' => $booking->id ?? 'pendiente',
             ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $booking->load('field'),
-            ], 201);
-        } catch (\Exception $e) {
-            \Log::error('Error creating booking: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear la reserva',
-                'error' => $e->getMessage(),
-            ], 500);
         }
+
+        $totalPrice = floatval($field->price_per_match);
+        $amountToPay = $totalPrice;
+        $paymentMethod = 'mercadopago';
+        $paymentId = $request->input('payment_id');
+
+        // Lógica de pago (sin cambios)
+        if ($request->input('use_wallet', false)) {
+            $wallet = auth()->user()->wallet;
+            if ($wallet && $wallet->balance > 0) {
+                if ($wallet->balance >= $totalPrice) {
+                    $this->walletService->withdraw(auth()->user(), $totalPrice, "Pago de reserva para {$field->name}");
+                    $amountToPay = 0;
+                    $paymentMethod = 'wallet';
+                    $paymentId = null;
+                } else {
+                    $amountToPay -= $wallet->balance;
+                    $this->walletService->withdraw(auth()->user(), $wallet->balance, "Pago parcial con monedero para {$field->name}");
+                    $paymentMethod = 'mixed';
+                }
+            }
+        }
+
+        if ($amountToPay > 0) {
+            if (empty($request->input('payment_id')) || empty($request->input('order_id'))) {
+                return response()->json(['message' => 'Falta payment_id o order_id para pago con MercadoPago'], 422);
+            }
+
+            $order = Order::findOrFail($validated['order_id']);
+            if ($order->type !== 'booking' || $order->reference_id != $validated['field_id']) {
+                return response()->json(['message' => 'Orden inválida para esta reserva'], 422);
+            }
+
+            if ($order->payment_id !== $request->input('payment_id') || $order->status !== 'completed') {
+                $paymentInfo = $this->mercadoPagoService->getPaymentInfo($request->input('payment_id'));
+                if ($paymentInfo['status'] !== 'approved') {
+                    return response()->json(['message' => 'El pago aún no ha sido aprobado'], 422);
+                }
+                $order->update([
+                    'payment_id' => $request->input('payment_id'),
+                    'status' => 'completed',
+                    'payment_details' => array_merge($order->payment_details, ['payment_info' => $paymentInfo]),
+                ]);
+            }
+        }
+
+        // Crear la reserva directamente
+        $booking = Booking::create([
+            'user_id' => auth()->id(),
+            'field_id' => $field->id,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+            'total_price' => $totalPrice,
+            'status' => 'confirmed',
+            'players_needed' => $validated['players_needed'],
+            'allow_joining' => $validated['allow_joining'] ?? false,
+            'payment_id' => $paymentId,
+            'payment_status' => 'completed',
+            'payment_method' => $paymentMethod,
+            'daily_match_id' => $match ? $match->id : null,
+        ]);
+
+        \Log::info('Booking created successfully', [
+            'booking_id' => $booking->id,
+            'field_id' => $field->id,
+            'start_time' => $startTime,
+            'daily_match_id' => $booking->daily_match_id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $booking->load('field'),
+        ], 201);
+    } catch (\Exception $e) {
+        \Log::error('Error creating booking: ' . $e->getMessage(), [
+            'exception' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear la reserva',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
 
     public function getAvailableHours(Field $field, Request $request)
     {
@@ -205,29 +250,41 @@ class BookingController extends Controller
         if ($booking->user_id !== auth()->id()) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
-
+    
         if ($booking->status === 'cancelled') {
             return response()->json(['message' => 'La reserva ya está cancelada'], 400);
         }
-
+    
         if ($booking->start_time < now()) {
             return response()->json(['message' => 'No se puede cancelar una reserva pasada'], 400);
         }
-
+    
         // Actualizar la reserva
         $booking->update([
             'status' => 'cancelled',
             'cancellation_reason' => $request->input('reason'),
             'payment_status' => 'refunded',
         ]);
-
+    
         // Reembolsar al monedero
         $this->walletService->refundBooking(
             auth()->user(),
             floatval($booking->total_price),
             "Reserva #{$booking->id}"
         );
-
+    
+        // Si está vinculado a un partido, revertir su estado a 'open'
+        if ($booking->daily_match_id) {
+            $match = DailyMatch::find($booking->daily_match_id);
+            if ($match && $match->status === 'reserved') {
+                $match->update(['status' => 'open']);
+                \Log::info('Estado del partido revertido a open tras cancelación', [
+                    'match_id' => $match->id,
+                    'booking_id' => $booking->id,
+                ]);
+            }
+        }
+    
         return response()->json([
             'message' => 'Reserva cancelada y reembolsada al monedero',
             'booking' => $booking,

@@ -518,11 +518,11 @@ class WebhookController extends Controller
             throw $e;
         }
     }
-
     private function processBooking(Order $order, $paymentInfo)
     {
         $details = $order->payment_details;
-
+    
+        // Verificar si ya existe una reserva con este payment_id
         $existingBooking = Booking::where('payment_id', $paymentInfo['id'])->first();
         if ($existingBooking) {
             Log::info('Booking already exists:', ['booking_id' => $existingBooking->id]);
@@ -532,10 +532,50 @@ class WebhookController extends Controller
                 'message' => 'Booking already exists'
             ]);
         }
-
-        $startTime = Carbon::parse("{$details['date']} {$details['start_time']}");
-        $endTime = $startTime->copy()->addHour();
-
+    
+        // Obtener la zona horaria de la cancha (fija por ahora, escalable luego)
+        $timezone = 'America/Montevideo'; // Podemos añadir un campo timezone más adelante
+    
+        // Preparar datos de la reserva
+        $startTimeRaw = $details['start_time']; // ej. "12:00"
+        if (strlen($startTimeRaw) == 5) { // H:i
+            $startTimeRaw .= ':00'; // H:i:s, ej. "12:00:00"
+        }
+        $scheduleDate = $details['date']; // ej. "2025-03-12"
+    
+        // Parsear el horario en la zona horaria de la cancha y convertir a UTC
+        $startTimeLocal = Carbon::parse("{$scheduleDate} {$startTimeRaw}", $timezone);
+        $endTimeLocal = $startTimeLocal->copy()->addHour();
+    
+        $startTime = $startTimeLocal->copy()->setTimezone('UTC');
+        $endTime = $endTimeLocal->copy()->setTimezone('UTC');
+    
+        Log::info('Datos de entrada', [
+            'field_id' => $order->reference_id,
+            'timezone' => $timezone,
+            'schedule_date' => $scheduleDate,
+            'start_time_raw' => $startTimeRaw,
+            'start_time_local' => $startTimeLocal->toDateTimeString(),
+            'end_time_local' => $endTimeLocal->toDateTimeString(),
+            'start_time_utc' => $startTime->toDateTimeString(),
+            'end_time_utc' => $endTime->toDateTimeString(),
+        ]);
+    
+        // Buscar el partido en DailyMatch (opcional, mantenido por si lo usas)
+        $match = DailyMatch::where('field_id', $order->reference_id)
+            ->where('schedule_date', $scheduleDate)
+            ->where('start_time', $startTimeRaw)
+            ->where('status', 'open')
+            ->first();
+    
+        Log::info('Búsqueda de partido en processBooking', [
+            'field_id' => $order->reference_id,
+            'schedule_date' => $scheduleDate,
+            'start_time' => $startTimeRaw,
+            'match_found' => $match ? $match->toArray() : 'No encontrado',
+        ]);
+    
+        // Crear la reserva directamente (sin verificar disponibilidad)
         $booking = Booking::create([
             'user_id' => $order->user_id,
             'field_id' => $order->reference_id,
@@ -545,16 +585,29 @@ class WebhookController extends Controller
             'status' => 'confirmed',
             'payment_status' => 'completed',
             'payment_id' => $paymentInfo['id'],
+            'payment_method' => 'mercadopago',
             'players_needed' => $details['players_needed'] ?? null,
-            'allow_joining' => $details['allow_joining'] ?? false
+            'allow_joining' => $details['allow_joining'] ?? false,
+            'daily_match_id' => $match ? $match->id : null,
         ]);
-
+    
+        // Si se encontró un partido, marcarlo como reservado
+        if ($match) {
+            $match->update(['status' => 'reserved']);
+            Log::info('Partido marcado como reservado', [
+                'match_id' => $match->id,
+                'booking_id' => $booking->id,
+            ]);
+        }
+    
         Log::info('Booking created successfully:', [
             'booking_id' => $booking->id,
             'field_id' => $booking->field_id,
-            'start_time' => $booking->start_time
+            'start_time' => $booking->start_time->toDateTimeString(),
+            'end_time' => $booking->end_time->toDateTimeString(),
+            'daily_match_id' => $booking->daily_match_id,
         ]);
-
+    
         return response()->json([
             'status' => 'success',
             'booking_id' => $booking->id,

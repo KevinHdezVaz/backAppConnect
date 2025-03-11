@@ -200,7 +200,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/chat/equipos/{equipoId}/mensajes', [ChatMensajeController::class, 'getMensajesEquipo']);
     Route::post('/chat/mensaje', [ChatMensajeController::class, 'store']);
 
-
+    Route::get('/daily-matches/check', [DailyMatchController::class, 'checkMatch']);
+    
     Route::get('/fields', [FieldController::class, 'index']);
     Route::get('/fields/{field}', [FieldController::class, 'show']);
     Route::get('/fields/{field}/availability', [FieldController::class, 'checkAvailability']);
