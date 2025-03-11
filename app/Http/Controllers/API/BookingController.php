@@ -3,8 +3,9 @@ namespace App\Http\Controllers\API;
 
 use Carbon\Carbon;
 use App\Models\Field;
-use App\Models\Booking;
 use App\Models\Order;
+use App\Models\Booking;
+use App\Models\DailyMatch;
 use Illuminate\Http\Request;
 use App\Services\WalletService;
 use App\Http\Controllers\Controller;
@@ -153,32 +154,39 @@ class BookingController extends Controller
         $request->validate([
             'date' => 'required|date_format:Y-m-d',
         ]);
-
+    
         $date = Carbon::parse($request->date);
         $dayOfWeek = strtolower($date->format('l')); // Día de la semana en minúsculas (monday, tuesday, etc.)
-
+    
         \Log::info('Requesting available hours', [
             'field_id' => $field->id,
             'date' => $request->date,
             'day_of_week' => $dayOfWeek
         ]);
-
+    
         // Verificar si la fecha es pasada (excepto hoy)
         if ($date->isPast() && !$date->isToday()) {
             return response()->json(['available_hours' => []]);
         }
-
-        // Obtener los horarios disponibles usando el método del modelo Field
-        $availableHoursByDay = $field->getAvailableHours($request->date);
-
-        // Extraer los horarios del día solicitado
-        $availableHours = $availableHoursByDay[$dayOfWeek] ?? [];
-
-        \Log::info('Filtered available hours', [
+    
+        // Obtener los partidos 'open' para esta cancha y fecha
+        $matches = DailyMatch::where('field_id', $field->id)
+            ->where('schedule_date', $date->format('Y-m-d'))
+            ->where('status', 'open')
+            ->get();
+    
+        // Extraer los horarios de inicio de los partidos disponibles
+        $availableHours = $matches->map(function ($match) {
+            return $match->start_time; // Asumimos que start_time es el horario disponible
+        })->unique()->values()->all();
+    
+        \Log::info('Available hours based on open matches', [
+            'field_id' => $field->id,
+            'date' => $date->format('Y-m-d'),
             'available_hours' => $availableHours,
         ]);
-
-        return response()->json(['available_hours' => array_values($availableHours)]);
+    
+        return response()->json(['available_hours' => $availableHours]);
     }
 
     private function checkAvailability($fieldId, $startTime, $endTime) 

@@ -168,6 +168,8 @@ class NotificationController extends Controller
             ], 500);
         }
     }
+
+    
     public function markAllAsRead(Request $request)
     {
         try {

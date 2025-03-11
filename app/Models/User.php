@@ -7,6 +7,7 @@ use App\Models\ChatMensaje;
 use App\Models\MatchTeamPlayer;
 use App\Models\WalletTransaction;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\ProfileVerification;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -29,6 +30,8 @@ class User extends Authenticatable {
         'profile_image',
         'referral_code', // Agregado
         'invite_code',   // Agregado
+        'is_verified', // Agregar este campo
+
     ];
 
 
@@ -40,6 +43,8 @@ class User extends Authenticatable {
     protected $casts = [
         'email_verified_at' => 'datetime',
         'verified' => 'boolean',
+        'is_verified' => 'boolean', // Asegúrate de que esté casteado como booleano
+
     ];
 
     public function matchTeamPlayers()
@@ -68,6 +73,11 @@ public function equipos()
     return $this->belongsToMany(Equipo::class, 'equipo_usuarios')
                 ->withPivot(['rol', 'estado', 'posicion'])
                 ->withTimestamps();
+}
+
+public function profileVerifications()
+{
+    return $this->hasMany(ProfileVerification::class);
 }
 
 public function wallet()

@@ -34,6 +34,16 @@
         <h6 class="ps-4 ms-2 text-uppercase text-xs font-weight-bolder opacity-6">Funciones</h6>
       </li>
 
+      <!-- Enlace a Verificaciones de DNI -->
+      <li class="nav-item pb-2">
+        <a class="nav-link {{ (Request::is('admin/verifications') ? 'active' : '') }}" href="{{ route('admin.verifications.index') }}">
+          <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
+            <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('admin/verifications') ? 'fa-id-card text-white' : 'fa-id-card text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
+          </div>
+          <span class="nav-link-text ms-1">Verificaciones</span>
+        </a>
+      </li>
+
       <li class="nav-item pb-2">
         <a class="nav-link {{ (Request::is('user-management') ? 'active' : '') }}" href="{{ url('user-management') }}">
           <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
@@ -79,8 +89,8 @@
         </a>
       </li>
 
-   <!-- Enlace a Bonos -->
-   <li class="nav-item pb-2">
+      <!-- Enlace a Bonos -->
+      <li class="nav-item pb-2">
         <a class="nav-link {{ (Request::is('bonos') ? 'active' : '') }}" href="{{ url('bonos') }}">
           <div class="icon icon-shape icon-sm shadow border-radius-md bg-white text-center me-2 d-flex align-items-center justify-content-center">
             <i style="font-size: 1rem;" class="fas fa-lg {{ (Request::is('bonos') ? 'fa-ticket-alt text-white' : 'fa-ticket-alt text-dark') }} ps-2 pe-2 text-center" aria-hidden="true"></i>
@@ -88,6 +98,7 @@
           <span class="nav-link-text ms-1">Bonos</span>
         </a>
       </li>
+
       <li class="nav-item mt-2">
         <h6 class="ps-4 ms-2 text-uppercase text-xs font-weight-bolder opacity-6">Otros</h6>
       </li>
@@ -139,7 +150,6 @@
           <span class="nav-link-text ms-1">Billing</span>
         </a>
       </li>
-
     </ul>
   </div>
 </aside>

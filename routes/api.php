@@ -19,6 +19,7 @@ use App\Http\Controllers\MatchRatingController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\MatchPlayersController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\API\TorneoAPIController;
 use App\Http\Controllers\CarouselImageController;
 use App\Http\Controllers\ProductTiendaController;
@@ -66,6 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/bonos/cancelar/{userBono}', [BonoController::class, 'cancelarBono']);
     Route::post('/bonos/verificar-codigo', [BonoController::class, 'verificarCodigo']);
  
+
+    Route::post('/upload-dni', [VerificationController::class, 'uploadDni'])->name('api.upload-dni');
+    
     Route::prefix('payments')->group(function () {
         Route::post('create-preference', [PaymentController::class, 'createPreference']);
         Route::get('success', [PaymentController::class, 'success'])->name('payments.success');
@@ -172,9 +176,8 @@ Route::group(['prefix' => 'torneos'], function () {
 
   Route::post('/store-player-id', [NotificationController::class, 'storePlayerId']);
 
-Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAvailableHours'])
-    ->middleware('auth:sanctum');
-
+Route::get('/fields/{field}/available-hours', [BookingController::class, 'getAvailableHours']);
+ 
     Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         return $request->user();
     });

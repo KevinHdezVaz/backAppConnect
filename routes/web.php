@@ -18,6 +18,7 @@ use App\Http\Controllers\Torneo\TorneoController;
 use App\Http\Controllers\ChangePasswordController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\FieldManagementController;
+use App\Http\Controllers\VerificationController;
 
 // Rutas públicas/guest
 Route::middleware(['guest'])->group(function () {
@@ -127,6 +128,14 @@ Route::put('/product/{id}', [ProductTiendaController::class, 'update'])->name('p
         Route::post('/product', [ProductTiendaController::class, 'store'])->name('product.store');
         Route::delete('/product/{id}', [ProductTiendaController::class, 'destroy'])->name('product.destroy');
  
+
+        
+    
+            Route::get('/admin/verifications', [VerificationController::class, 'index'])->name('admin.verifications.index');
+            Route::get('/admin/verifications/{id}', [VerificationController::class, 'show'])->name('admin.verifications.show');
+            Route::put('/admin/verifications/{id}', [VerificationController::class, 'update'])->name('admin.verifications.update');
+    
+
 
     // Torneo
     Route::get('/tournament', [TorneoController::class, 'index'])->name('torneos.index');
